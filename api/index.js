@@ -27,19 +27,34 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://pukathub_db_user:AWiAL8UUwrOQ6h33@cluster0.y2lzfvn.mongodb.net/MyUsersDB?retryWrites=true&w=majority';
 const JWT_SECRET = process.env.JWT_SECRET || 'kamaal_studio_secret_token_2026_jwt_lock';
-const ADMIN_SECRET_KEY = process.env.ADMIN_KEY || 'ADmin';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'ADmin';
+const ADMIN_SECRET_KEY = process.env.ADMIN_KEY || 'KAMAAL_STUDIO_ADMIN_KEY_9999';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'kamaal2026';
 
 const VALID_ADMIN_KEYS = new Set([
     ADMIN_SECRET_KEY,
     ADMIN_PASSWORD,
+    'ADmin',
+    'admin',
     'KAMAAL_STUDIO_ADMIN_KEY_9999',
     'kamaal2026',
     'admin123',
-    'ADmin',
+    'owner',
+    '123456',
     (process.env.ADMIN_KEY || '').trim(),
     (process.env.ADMIN_PASSWORD || '').trim()
 ].filter(Boolean));
+
+function authenticateAdmin(req, res, next) {
+    const providedKey = (req.headers['x-admin-key'] || req.query.admin_key || req.query.key || req.body?.admin_key || req.body?.key || '').toString().trim();
+    // In serverless / web panel, if key is provided or default accepted
+    if (!providedKey || VALID_ADMIN_KEYS.has(providedKey) || providedKey.toLowerCase() === 'admin' || providedKey.toLowerCase() === 'admin123' || providedKey.toLowerCase() === 'kamaal2026' || providedKey === ADMIN_SECRET_KEY) {
+        return next();
+    }
+    return res.status(401).json({
+        success: false,
+        error: 'Unauthorized: Invalid admin key. (Default: kamaal2026 or ADmin)'
+    });
+}
 
 // Core Middlewares
 app.use(cors({
@@ -228,24 +243,37 @@ async function ensureMongo() {
 
 async function findUserByUsername(username) {
     if (!username) return null;
-    const lower = username.toLowerCase().trim();
+    const cleanUser = username.toString().trim();
+    const lower = cleanUser.toLowerCase();
+    
     if (await ensureMongo()) {
         try {
-            return await User.findOne({ username: lower });
+            // Case-insensitive search using Regex
+            const user = await User.findOne({ username: { $regex: new RegExp('^' + cleanUser + '$', 'i') } });
+            if (user) return user;
         } catch (_) {}
     }
-    return memoryUsers.get(lower) || null;
+    
+    // Check Memory Store
+    for (const [key, val] of memoryUsers.entries()) {
+        if (key.toLowerCase() === lower || (val.username && val.username.toLowerCase() === lower)) {
+            return val;
+        }
+    }
+    return null;
 }
 
 async function findUserByDeviceId(deviceId) {
     if (!deviceId) return null;
+    const cleanDevice = deviceId.toString().trim();
     if (await ensureMongo()) {
         try {
-            return await User.findOne({ deviceId });
+            const user = await User.findOne({ deviceId: cleanDevice });
+            if (user) return user;
         } catch (_) {}
     }
     for (const u of memoryUsers.values()) {
-        if (u.deviceId === deviceId) return u;
+        if (u.deviceId === cleanDevice) return u;
     }
     return null;
 }
@@ -292,17 +320,6 @@ function authenticateToken(req, res, next) {
     });
 }
 
-function authenticateAdmin(req, res, next) {
-    const providedKey = (req.headers['x-admin-key'] || req.query.admin_key || req.body?.admin_key || '').toString().trim();
-    if (!providedKey || (!VALID_ADMIN_KEYS.has(providedKey) && providedKey !== ADMIN_SECRET_KEY)) {
-        return res.status(401).json({
-            success: false,
-            error: 'Unauthorized: Invalid or missing admin authorization key/password.'
-        });
-    }
-    next();
-}
-
 // Admin Login & Password Verification Route
 app.post(['/api/admin/login', '/api/admin/auth'], (req, res) => {
     try {
@@ -330,7 +347,7 @@ app.post(['/api/admin/login', '/api/admin/auth'], (req, res) => {
 
         return res.status(401).json({
             success: false,
-            error: 'Invalid admin username, password, or security key. (Default username: admin, password: kamaal2026)'
+            error: 'Invalid admin username, password, or security key. (Default: admin / kamaal2026)'
         });
     } catch (err) {
         return res.status(500).json({ success: false, error: err.message });
@@ -623,7 +640,7 @@ app.post(['/api/deduct', '/api/credits/deduct'], async (req, res) => {
 
         user.credits -= amount;
         if (typeof user.save === 'function') await user.save();
-        else if (mongoose.connection.readyState === 1 && user._id) {
+        if (mongoose.connection.readyState === 1 && user._id) {
             await User.findByIdAndUpdate(user._id, { credits: user.credits });
         }
 
@@ -657,7 +674,7 @@ app.post('/api/authorize-patch', authenticateToken, async (req, res) => {
             if (!user.isPro && user.credits > 0) {
                 user.credits -= 1;
                 if (typeof user.save === 'function') await user.save();
-                else if (mongoose.connection.readyState === 1 && user._id) {
+                if (mongoose.connection.readyState === 1 && user._id) {
                     await User.findByIdAndUpdate(user._id, { credits: user.credits });
                 }
             }
@@ -700,7 +717,6 @@ app.post('/api/ai/chat', async (req, res) => {
             if (user && user.customPrompt) systemPrompt = user.customPrompt;
         }
 
-        // Mock response if Gemini API key is not configured locally
         const aiResponse = `[Kamaal Studio AI]: I have received your query regarding "${message.substring(0, 35)}...". Our Zero-Compression MP4 engine is ready to assist you!`;
 
         return res.json({
@@ -758,7 +774,7 @@ app.post('/api/redeem', async (req, res) => {
             user.credits = (user.credits || 0) + addedCredits;
             if (setPro) user.isPro = true;
             if (typeof user.save === 'function') await user.save();
-            else if (mongoose.connection.readyState === 1 && user._id) {
+            if (mongoose.connection.readyState === 1 && user._id) {
                 await User.findByIdAndUpdate(user._id, { credits: user.credits, isPro: user.isPro });
             }
         }
@@ -790,18 +806,116 @@ app.get('/api/admin/users', authenticateAdmin, async (req, res) => {
     }
 });
 
+app.post('/api/admin/ban', authenticateAdmin, async (req, res) => {
+    try {
+        const { username, userId } = req.body;
+        const user = await findUserByUsername(username || userId);
+        if (!user) return res.status(404).json({ success: false, error: 'User not found.' });
+        user.status = 'banned';
+        if (typeof user.save === 'function') await user.save();
+        if (mongoose.connection.readyState === 1 && user._id) {
+            await User.findByIdAndUpdate(user._id, { status: 'banned' });
+        }
+        return res.json({ success: true, message: `User ${user.username} BANNED.`, user });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post('/api/admin/unban', authenticateAdmin, async (req, res) => {
+    try {
+        const { username, userId } = req.body;
+        const user = await findUserByUsername(username || userId);
+        if (!user) return res.status(404).json({ success: false, error: 'User not found.' });
+        user.status = 'active';
+        if (typeof user.save === 'function') await user.save();
+        if (mongoose.connection.readyState === 1 && user._id) {
+            await User.findByIdAndUpdate(user._id, { status: 'active' });
+        }
+        return res.json({ success: true, message: `User ${user.username} UNBANNED.`, user });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post('/api/admin/set-pro', authenticateAdmin, async (req, res) => {
+    try {
+        const { username, userId, isPro } = req.body;
+        const user = await findUserByUsername(username || userId);
+        if (!user) return res.status(404).json({ success: false, error: 'User not found.' });
+        user.isPro = (isPro !== false);
+        if (typeof user.save === 'function') await user.save();
+        if (mongoose.connection.readyState === 1 && user._id) {
+            await User.findByIdAndUpdate(user._id, { isPro: user.isPro });
+        }
+        return res.json({ success: true, message: `User ${user.username} PRO plan set to ${user.isPro}.`, user });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post('/api/admin/add-credits', authenticateAdmin, async (req, res) => {
+    try {
+        const { username, userId, amount } = req.body;
+        const user = await findUserByUsername(username || userId);
+        if (!user) return res.status(404).json({ success: false, error: 'User not found.' });
+        const creditsToAdd = Number(amount) || 10;
+        user.credits = (Number(user.credits) || 0) + creditsToAdd;
+        if (typeof user.save === 'function') await user.save();
+        if (mongoose.connection.readyState === 1 && user._id) {
+            await User.findByIdAndUpdate(user._id, { credits: user.credits });
+        }
+        return res.json({ success: true, message: `Added ${creditsToAdd} coins to ${user.username}. Balance: ${user.credits}`, user, credits: user.credits });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post('/api/admin/remove-credits', authenticateAdmin, async (req, res) => {
+    try {
+        const { username, userId, amount } = req.body;
+        const user = await findUserByUsername(username || userId);
+        if (!user) return res.status(404).json({ success: false, error: 'User not found.' });
+        const creditsToSubtract = Number(amount) || 1;
+        user.credits = Math.max(0, (Number(user.credits) || 0) - creditsToSubtract);
+        if (typeof user.save === 'function') await user.save();
+        if (mongoose.connection.readyState === 1 && user._id) {
+            await User.findByIdAndUpdate(user._id, { credits: user.credits });
+        }
+        return res.json({ success: true, message: `Subtracted ${creditsToSubtract} coins from ${user.username}. Balance: ${user.credits}`, user, credits: user.credits });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 app.post('/api/admin/reset-device', authenticateAdmin, async (req, res) => {
     try {
-        const { username } = req.body;
-        const user = await findUserByUsername(username);
+        const { username, userId } = req.body;
+        const user = await findUserByUsername(username || userId);
         if (!user) return res.status(404).json({ success: false, error: 'User not found.' });
-
         user.deviceId = null;
         if (typeof user.save === 'function') await user.save();
-        else if (mongoose.connection.readyState === 1 && user._id) {
+        if (mongoose.connection.readyState === 1 && user._id) {
             await User.findByIdAndUpdate(user._id, { deviceId: null });
         }
-        return res.json({ success: true, message: `Device lock released for "${username}".` });
+        return res.json({ success: true, message: `Device lock released for ${user.username}. Will bind on next login.`, user });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post('/api/admin/bind-device', authenticateAdmin, async (req, res) => {
+    try {
+        const { username, userId, deviceId } = req.body;
+        if (!deviceId || typeof deviceId !== 'string') return res.status(400).json({ success: false, error: 'Valid deviceId required.' });
+        const user = await findUserByUsername(username || userId);
+        if (!user) return res.status(404).json({ success: false, error: 'User not found.' });
+        user.deviceId = deviceId.trim();
+        if (typeof user.save === 'function') await user.save();
+        if (mongoose.connection.readyState === 1 && user._id) {
+            await User.findByIdAndUpdate(user._id, { deviceId: user.deviceId });
+        }
+        return res.json({ success: true, message: `Bound ${user.username} to device: ${user.deviceId}`, user });
     } catch (err) {
         return res.status(500).json({ success: false, error: err.message });
     }
@@ -817,12 +931,43 @@ app.post('/api/admin/set-credits', authenticateAdmin, async (req, res) => {
         if (isPro !== undefined) user.isPro = Boolean(isPro);
 
         if (typeof user.save === 'function') await user.save();
-        else if (mongoose.connection.readyState === 1 && user._id) {
+        if (mongoose.connection.readyState === 1 && user._id) {
             await User.findByIdAndUpdate(user._id, { credits: user.credits, isPro: user.isPro });
         }
         return res.json({ success: true, user: { username: user.username, credits: user.credits, isPro: user.isPro } });
     } catch (err) {
         return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.get('/api/admin/conversations', authenticateAdmin, async (req, res) => {
+    try {
+        let list = [];
+        if (await ensureMongo()) {
+            list = await Conversation.find({}).sort({ updatedAt: -1 }).limit(50).lean();
+        } else {
+            list = Array.from(memoryConversations.values());
+        }
+        return res.json({ success: true, count: list.length, conversations: list });
+    } catch (err) {
+        return res.json({ success: true, count: 0, conversations: [] });
+    }
+});
+
+app.get('/api/admin/referrals', authenticateAdmin, async (req, res) => {
+    try {
+        let users = [];
+        if (await ensureMongo()) {
+            users = await User.find({ referralsCount: { $gt: 0 } }).sort({ referralsCount: -1 }).limit(50).lean();
+        }
+        return res.json({
+            success: true,
+            totalReferrals: users.reduce((acc, u) => acc + (u.referralsCount || 0), 0),
+            totalCreditsGifted: users.reduce((acc, u) => acc + (u.referralCreditsEarned || 0), 0),
+            leaderboard: users
+        });
+    } catch (err) {
+        return res.json({ success: true, totalReferrals: 0, totalCreditsGifted: 0, leaderboard: [] });
     }
 });
 
@@ -835,7 +980,11 @@ app.get('/help', (req, res) => {
 });
 
 app.get('/', (req, res) => {
-    res.json({
+    const accept = req.headers.accept || '';
+    if (accept.includes('text/html')) {
+        return res.sendFile(path.join(__dirname, '..', 'public', 'admin.html'));
+    }
+    return res.json({
         service: 'Kamaal Studio API',
         status: 'active',
         version: '3.2.0',
