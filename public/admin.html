@@ -2,1330 +2,389 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kamaal Studio - Command & Control Hub</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Kamaal Studio - Command Core</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
-        body {
-            font-family: 'Space Grotesk', sans-serif;
-            background-color: #030712;
-        }
-        .code-font {
-            font-family: 'JetBrains Mono', monospace;
-        }
-        .glass-panel {
-            background: rgba(17, 24, 39, 0.78);
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-        }
-        .glass-input {
-            background: rgba(3, 7, 18, 0.7);
-            border: 1px solid rgba(255, 255, 255, 0.12);
-        }
-        .glass-input:focus {
-            border-color: #10B981;
-            outline: none;
-            box-shadow: 0 0 15px rgba(16, 185, 129, 0.2);
-        }
+        * { -webkit-tap-highlight-color: transparent; }
+        body { font-family: 'Space Grotesk', sans-serif; background-color: #030712; color: #F8FAFC; }
+        .code-font { font-family: 'JetBrains Mono', monospace; }
+        .app-glass { background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(24px); border: 1px solid rgba(255, 255, 255, 0.08); }
+        .app-glass-card { background: rgba(17, 24, 39, 0.7); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.07); }
+        .glass-input { background: rgba(3, 7, 18, 0.85); border: 1px solid rgba(255, 255, 255, 0.12); }
+        .glass-input:focus { border-color: #00E5FF; outline: none; box-shadow: 0 0 16px rgba(0, 229, 255, 0.25); }
     </style>
 </head>
-<body class="text-slate-100 min-h-screen p-3 md:p-8">
-    <div class="max-w-7xl mx-auto space-y-6">
-        
-        <!-- Header -->
-        <header class="glass-panel rounded-2xl p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-emerald-500/20 shadow-2xl">
-            <div>
-                <div class="flex items-center gap-3">
-                    <span class="w-3.5 h-3.5 rounded-full bg-emerald-400 animate-ping"></span>
-                    <h1 class="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-                        Kamaal Studio 
-                        <span class="text-emerald-400 text-xs font-bold tracking-wider border border-emerald-500/40 px-2.5 py-1 rounded-full uppercase">Command Core v3.2</span>
-                    </h1>
-                </div>
-                <p class="text-xs md:text-sm text-slate-400 mt-1">
-                    Device Lock Governance • Credit Management • Custom AI Chatbot System Prompt Engine
-                </p>
+<body class="min-h-screen flex flex-col justify-between select-none bg-[#030712]">
+
+    <!-- 1. PASSWORD LOCK SCREEN -->
+    <div id="lockScreen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#030712]/95 backdrop-blur-2xl">
+        <div class="w-full max-w-sm app-glass rounded-3xl p-6 border border-cyan-500/30 shadow-2xl space-y-6 text-center">
+            <div class="mx-auto w-16 h-16 rounded-2xl bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-3xl">
+                🛡️
             </div>
-            
-            <div class="flex items-center gap-2 w-full md:w-auto">
-                <div class="relative w-full md:w-64">
-                    <input id="adminKeyInput" type="password" placeholder="Enter Admin Key" class="w-full glass-input text-xs rounded-xl px-3.5 py-2.5 text-white code-font">
-                </div>
-                <button onclick="saveAdminKey()" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs px-4 py-2.5 rounded-xl transition shadow-lg shadow-emerald-500/20">
-                    Connect
-                </button>
+            <div>
+                <h1 class="text-xl font-bold text-white">Kamaal Studio Core</h1>
+                <p class="text-xs text-slate-400 mt-1">Authorized Administrator Access Only</p>
+            </div>
+            <div class="space-y-2 text-left">
+                <label class="text-[11px] font-semibold text-slate-400 uppercase">Admin Password / Key:</label>
+                <input id="loginAdminKey" type="password" placeholder="Enter password (e.g. ADmin)..." class="w-full glass-input text-sm rounded-xl px-4 py-3 text-white code-font" onkeydown="if(event.key==='Enter') verifyAndUnlockApp()">
+                <p id="lockErrorMsg" class="text-xs text-rose-400 font-medium hidden">⚠️ Invalid Password!</p>
+            </div>
+            <button onclick="verifyAndUnlockApp()" class="w-full py-3 bg-gradient-to-r from-cyan-500 to-emerald-400 text-slate-950 font-bold text-sm rounded-xl shadow-lg active:scale-95 transition">
+                🔓 Unlock Command Center
+            </button>
+        </div>
+    </div>
+
+    <!-- 2. MAIN APP UI -->
+    <div id="mainAppUi" class="hidden flex-1 max-w-2xl mx-auto w-full flex flex-col pb-24">
+        <header class="sticky top-0 z-40 app-glass border-b border-slate-800 px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+                <span class="text-sm font-bold text-white">Command Core</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <button onclick="refreshCurrentTab()" class="px-2.5 py-1 bg-slate-800 text-slate-300 rounded-lg text-xs">🔄</button>
+                <button onclick="lockAdminScreen()" class="px-2.5 py-1 bg-rose-500/20 text-rose-300 rounded-lg text-xs font-bold">🔒 Lock</button>
             </div>
         </header>
 
-        <!-- Notification Toast -->
-        <div id="toast" class="hidden p-4 rounded-xl text-sm font-semibold transition duration-300 shadow-xl"></div>
+        <div id="toast" class="hidden mx-4 mt-3 p-3 rounded-xl text-xs font-semibold"></div>
 
-        <!-- ================================================================= -->
-        <!-- EMERGENCY APP FREEZE / MAINTENANCE CONTROL BAR -->
-        <!-- ================================================================= -->
-        <section id="freezeControlPanel" class="glass-panel rounded-2xl p-5 border-amber-500/30 shadow-2xl transition duration-300">
-            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div class="space-y-1">
-                    <div class="flex items-center gap-2.5">
-                        <span id="maintenanceStatusDot" class="w-3 h-3 rounded-full bg-emerald-400"></span>
-                        <h2 class="text-sm md:text-base font-bold text-white flex items-center gap-2">
-                            App Operational State:
-                            <span id="maintenanceStatusBadge" class="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">🟢 NORMAL ACTIVE</span>
-                        </h2>
+        <main class="flex-1 p-4 space-y-4">
+            <!-- TAB 1: PROMPT -->
+            <div id="tabPrompt" class="tab-view space-y-4">
+                <div class="app-glass-card rounded-2xl p-4 border border-cyan-500/20 space-y-2">
+                    <div class="flex justify-between text-xs font-bold text-cyan-400">
+                        <span>Active Engine:</span>
+                        <span id="activeModelBadge" class="code-font text-[10px] bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded border border-cyan-500/40">gemini-2.5-flash</span>
                     </div>
-                    <p id="maintenanceStatusDescription" class="text-xs text-slate-400">
-                        When frozen, all video patch authorizations, AI chat queries, and registrations are paused with your custom broadcast message.
-                    </p>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="selectAiModel('gemini-3.1')" class="py-2 px-3 bg-slate-900 border border-slate-700 text-slate-300 rounded-xl text-xs text-left">gemini-3.1</button>
+                        <button onclick="selectAiModel('gemini-2.5-flash')" class="py-2 px-3 bg-slate-900 border border-cyan-500/60 text-cyan-300 rounded-xl text-xs text-left">gemini-2.5-flash</button>
+                    </div>
                 </div>
 
-                <div class="flex flex-wrap items-center gap-2 w-full md:w-auto">
-                    <input id="maintenanceMessageInput" type="text" placeholder="Custom Freeze Notice Message (optional)" class="glass-input text-xs rounded-xl px-3 py-2 text-white w-full md:w-80">
-                    <button id="freezeToggleButton" onclick="toggleAppFreeze()" class="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition shadow-lg shadow-rose-600/30 whitespace-nowrap">
+                <div class="app-glass-card rounded-2xl p-4 border border-slate-800 space-y-2">
+                    <div class="flex justify-between text-xs text-white font-bold">
+                        <span>Global System Prompt:</span>
+                        <button onclick="resetToFactoryDefault()" class="text-[10px] text-rose-400">Reset</button>
+                    </div>
+                    <textarea id="globalPromptInput" rows="6" class="w-full glass-input rounded-xl p-3 text-xs code-font text-slate-200"></textarea>
+                    <button onclick="deployGlobalPrompt()" class="w-full py-2.5 bg-gradient-to-r from-cyan-500 to-emerald-500 text-slate-950 font-bold text-xs rounded-xl">
+                        💾 Deploy Global Prompt
+                    </button>
+                </div>
+
+                <!-- Test AI -->
+                <div class="app-glass-card rounded-2xl p-4 border border-slate-800 space-y-2">
+                    <label class="text-xs font-bold text-emerald-400">Test AI Output:</label>
+                    <div class="flex gap-2">
+                        <input id="testQueryInput" type="text" placeholder="Question..." class="glass-input text-xs rounded-xl px-3 py-2 flex-1 text-white">
+                        <button onclick="runAiTest()" class="px-3 py-2 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs font-bold rounded-xl">Test ⚡</button>
+                    </div>
+                    <div id="testOutputBox" class="hidden rounded-xl p-3 bg-slate-950/80 text-xs code-font text-slate-300"></div>
+                </div>
+            </div>
+
+            <!-- TAB 2: VIP PROMPT -->
+            <div id="tabVip" class="tab-view hidden space-y-4">
+                <div class="app-glass-card rounded-2xl p-4 border border-purple-500/30 space-y-3">
+                    <h3 class="text-xs font-bold text-purple-300 uppercase">⭐ VIP / Per-User Custom Prompt</h3>
+                    <div class="flex gap-2">
+                        <input id="vipTargetUsername" type="text" placeholder="Username (e.g. mozammil)..." class="glass-input text-xs rounded-xl px-3 py-2 flex-1 text-white">
+                        <button onclick="fetchVipUserPrompt()" class="px-3 py-2 bg-purple-600/30 text-purple-300 border border-purple-500/40 text-xs font-bold rounded-xl">Check</button>
+                    </div>
+                    <textarea id="vipPromptText" rows="5" placeholder="Enter private custom prompt for this user..." class="w-full glass-input text-xs rounded-xl p-3 text-slate-200 code-font"></textarea>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="saveVipCustomPrompt()" class="py-2 bg-purple-600 text-white font-bold text-xs rounded-xl">Save For User</button>
+                        <button onclick="clearVipCustomPrompt()" class="py-2 bg-slate-800 text-rose-400 text-xs rounded-xl border border-rose-500/30">Revert Global</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: USERS & HW LOCK -->
+            <div id="tabUsers" class="tab-view hidden space-y-3">
+                <input id="userSearchInput" oninput="loadUsersList()" type="text" placeholder="Search user or device ID..." class="w-full glass-input text-xs rounded-xl px-3.5 py-2.5 text-white">
+                <div id="usersListContainer" class="space-y-2"></div>
+            </div>
+
+            <!-- TAB 4: FREEZE -->
+            <div id="tabMaintenance" class="tab-view hidden space-y-4">
+                <div class="app-glass-card rounded-2xl p-4 border border-amber-500/30 space-y-3">
+                    <div class="flex items-center gap-2">
+                        <span id="maintStatusDot" class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+                        <span id="maintStatusBadge" class="text-xs font-bold text-emerald-400">🟢 NORMAL ACTIVE</span>
+                    </div>
+                    <input id="freezeNoticeInput" type="text" placeholder="Freeze broadcast message..." class="w-full glass-input text-xs rounded-xl px-3 py-2 text-white">
+                    <button id="freezeToggleBtn" onclick="toggleEmergencyFreeze()" class="w-full py-3 bg-rose-600 text-white font-bold text-xs rounded-xl">
                         ❄️ FREEZE ENTIRE APP
                     </button>
                 </div>
             </div>
-        </section>
+        </main>
 
-        <!-- ================================================================= -->
-        <!-- SECTION 1: AI CHATBOT CUSTOM SYSTEM PROMPT & MODEL 3.1 MANAGER -->
-        <!-- ================================================================= -->
-        <section class="glass-panel rounded-2xl p-6 space-y-5 border-cyan-500/20 shadow-2xl">
-            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 pb-3 border-b border-slate-800">
-                <div class="flex items-center gap-3">
-                    <div class="w-9 h-9 rounded-xl bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-400 text-lg">
-                        🤖
-                    </div>
-                    <div>
-                        <h2 class="text-lg font-bold text-white flex items-center gap-2">
-                            In-App Chatbot System Prompt & AI Model Manager
-                            <span class="text-[10px] bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded-full border border-cyan-500/30">Live Server Sync</span>
-                        </h2>
-                        <p class="text-xs text-slate-400">Control the AI assistant's model, global system prompt, and configure per-user custom prompts.</p>
-                    </div>
-                </div>
-                <div class="flex items-center gap-2">
-                    <button onclick="loadSystemPrompt(); loadAiModel();" class="text-xs px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition border border-slate-700">
-                        🔄 Refresh Prompt
-                    </button>
-                </div>
-            </div>
-
-            <!-- AI Model Selector (3.1 / 2.5 / 2.0 / 1.5) -->
-            <div class="bg-slate-900/70 border border-slate-800 rounded-xl p-3.5 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
-                <div class="space-y-0.5">
-                    <div class="text-xs font-bold text-cyan-300 flex items-center gap-1.5">
-                        <span>🧠 Active Gemini Engine / Model:</span>
-                        <span id="activeModelBadge" class="code-font text-[11px] bg-cyan-500/20 border border-cyan-500/40 text-cyan-200 px-2 py-0.2 rounded">gemini-2.5-flash</span>
-                    </div>
-                    <p class="text-[11px] text-slate-400">Change the Google Gemini model powering video optimizations, audio voice chats, and AI explanations.</p>
-                </div>
-                <div class="flex items-center gap-2 w-full md:w-auto">
-                    <select id="modelSelect" class="glass-input text-xs rounded-xl px-3 py-2 text-white code-font">
-                        <option value="gemini-2.5-flash">gemini-2.5-flash (Recommended Default)</option>
-                        <option value="gemini-2.0-flash">gemini-2.0-flash (Ultra Low Latency)</option>
-                        <option value="gemini-1.5-pro">gemini-1.5-pro (Deep Reasoning)</option>
-                        <option value="gemini-1.5-flash">gemini-1.5-flash (Legacy Lightweight)</option>
-                    </select>
-                    <button onclick="saveAiModel()" class="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs px-4 py-2 rounded-xl transition whitespace-nowrap shadow-md shadow-cyan-500/20">
-                        Set Model
-                    </button>
-                </div>
-            </div>
-
-            <!-- Quick Preset Buttons -->
-            <div class="space-y-2">
-                <label class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Global Prompt Presets:</label>
-                <div class="flex flex-wrap gap-2" id="presetButtonsContainer">
-                    <button onclick="applyPreset('video_optimizer')" class="text-xs px-3 py-1.5 bg-slate-800/80 hover:bg-cyan-950 text-cyan-300 border border-cyan-500/30 rounded-lg transition">
-                        🎬 Video & TikTok Optimizer (Default)
-                    </button>
-                    <button onclick="applyPreset('sales_support')" class="text-xs px-3 py-1.5 bg-slate-800/80 hover:bg-amber-950 text-amber-300 border border-amber-500/30 rounded-lg transition">
-                        💎 VIP Sales & Credit Assistant
-                    </button>
-                    <button onclick="applyPreset('tech_troubleshooter')" class="text-xs px-3 py-1.5 bg-slate-800/80 hover:bg-purple-950 text-purple-300 border border-purple-500/30 rounded-lg transition">
-                        🛠️ Hardware Lock Specialist
-                    </button>
-                    <button onclick="applyPreset('urdu_english')" class="text-xs px-3 py-1.5 bg-slate-800/80 hover:bg-emerald-950 text-emerald-300 border border-emerald-500/30 rounded-lg transition">
-                        🇵🇰 Roman Urdu + English Bilingual
-                    </button>
-                </div>
-            </div>
-
-            <!-- Global Prompt Textarea -->
-            <div class="space-y-2">
-                <div class="flex justify-between items-center text-xs text-slate-400">
-                    <span class="font-semibold">Global System Instruction (Applies to all users by default):</span>
-                    <span id="promptCharCount" class="code-font text-slate-500">0 characters</span>
-                </div>
-                <textarea id="systemPromptInput" oninput="updateCharCount()" rows="7" class="w-full glass-input text-xs leading-relaxed rounded-xl p-4 text-slate-200 code-font focus:ring-1 focus:ring-cyan-400" placeholder="Loading current system prompt from server..."></textarea>
-            </div>
-
-            <!-- Action Buttons for Global Prompt -->
-            <div class="flex flex-col sm:flex-row justify-between items-center gap-3 pt-1">
-                <div class="flex items-center gap-2 w-full sm:w-auto">
-                    <button onclick="saveSystemPrompt()" class="w-full sm:w-auto bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold text-xs px-5 py-2.5 rounded-xl transition shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2">
-                        <span>💾</span> Save & Deploy Global Prompt
-                    </button>
-                    <button onclick="resetPromptToDefault()" class="w-full sm:w-auto bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold px-4 py-2.5 rounded-xl transition border border-slate-700">
-                        Reset Default
-                    </button>
-                </div>
-
-                <!-- Test AI Box Trigger -->
-                <div class="w-full sm:w-auto flex items-center gap-2">
-                    <input id="testAiInput" type="text" placeholder="Test question (e.g. TikTok 60fps setting?)" class="glass-input text-xs px-3 py-2 rounded-xl text-white w-full sm:w-64">
-                    <button onclick="testAiPrompt()" class="bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-cyan-500/40 text-xs font-bold px-4 py-2 rounded-xl transition whitespace-nowrap">
-                        Test Output ⚡
-                    </button>
-                </div>
-            </div>
-
-            <!-- Test Response Preview Box -->
-            <div id="testAiOutputBox" class="hidden rounded-xl p-4 bg-slate-950/80 border border-slate-800 text-xs space-y-1 code-font">
-                <div class="text-cyan-400 font-bold flex items-center justify-between">
-                    <span>AI Test Output Preview:</span>
-                    <button onclick="document.getElementById('testAiOutputBox').classList.add('hidden')" class="text-slate-500 hover:text-slate-300">✕ Close</button>
-                </div>
-                <div id="testAiOutputContent" class="text-slate-300 whitespace-pre-wrap leading-relaxed"></div>
-            </div>
-
-            <!-- ============================================================= -->
-            <!-- SUB-PANEL: PER-USER INDIVIDUAL CUSTOM PROMPT ASSIGNMENT -->
-            <!-- ============================================================= -->
-            <div class="mt-4 pt-4 border-t border-slate-800/80 space-y-3">
-                <div class="flex items-center justify-between">
-                    <h3 class="text-xs font-bold text-purple-300 uppercase tracking-wider flex items-center gap-2">
-                        <span>👤</span> Per-User Custom Prompt Overrides (Owner Control)
-                    </h3>
-                    <span class="text-[11px] text-slate-400">Give a private custom prompt to an individual user!</span>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
-                    <div class="space-y-1">
-                        <label class="text-[11px] text-slate-400 font-semibold">Target Username:</label>
-                        <input id="userCustomPromptUsername" type="text" placeholder="e.g. ali1 or mozammil" class="w-full glass-input text-xs rounded-xl px-3 py-2 text-white">
-                        <button onclick="checkUserPrompt()" class="w-full mt-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] py-1.5 rounded-lg border border-slate-700 transition">
-                            🔍 Check User Prompt
-                        </button>
-                    </div>
-                    <div class="md:col-span-3 space-y-1">
-                        <label class="text-[11px] text-slate-400 font-semibold">Custom System Prompt for this User (Leave blank to revert to Global Prompt):</label>
-                        <textarea id="userCustomPromptText" rows="3" class="w-full glass-input text-xs rounded-xl p-2.5 text-white code-font" placeholder="Enter instructions specifically for this user... e.g. 'You are personal VIP assistant for Mozammil. Always call him Boss and prioritize 4K HDR patching.'"></textarea>
-                        <div class="flex gap-2 justify-end">
-                            <button onclick="saveUserCustomPrompt()" class="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition shadow-md shadow-purple-600/30">
-                                💾 Save Custom Prompt For This User
-                            </button>
-                            <button onclick="clearUserCustomPrompt()" class="bg-slate-800 hover:bg-slate-700 text-rose-400 border border-rose-500/30 text-xs px-3 py-2 rounded-xl transition">
-                                ✕ Revert to Global
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- ================================================================= -->
-        <!-- SECTION 2: REGISTERED USERS & DEVICE HARDWARE LEDGER -->
-        <!-- ================================================================= -->
-        <section class="glass-panel rounded-2xl p-6 space-y-4 border-slate-800 shadow-2xl">
-            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-3 border-b border-slate-800">
-                <div>
-                    <div class="flex items-center gap-3">
-                        <h2 class="text-lg font-bold text-white flex items-center gap-2">
-                            User Ledger & Hardware Lock Control
-                            <span id="userCountBadge" class="bg-slate-800 text-xs px-2.5 py-0.5 rounded-full text-emerald-400 code-font border border-slate-700">0 Users</span>
-                        </h2>
-                    </div>
-                    <p class="text-xs text-slate-400 mt-0.5">Manage accounts, add credits, and reset/bind hardware locks with 1 click.</p>
-                </div>
-                
-                <div class="flex items-center gap-2 w-full md:w-auto">
-                    <input id="searchInput" oninput="loadUsers()" type="text" placeholder="Search user, device ID, phone..." class="glass-input text-xs rounded-xl px-4 py-2.5 text-white w-full md:w-72">
-                    <button onclick="loadUsers()" class="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition border border-slate-700" title="Refresh Users">
-                        🔄
-                    </button>
-                </div>
-            </div>
-
-            <!-- Interactive Notice for Hardware ID Binding -->
-            <div class="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-xs text-amber-200/90 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                <div class="flex items-center gap-2">
-                    <span>💡</span>
-                    <span><strong>Device Lock Tip:</strong> If a user gets "Device Locked" error on their phone (e.g. <code>ali1</code>), click <strong>"🔓 Reset Device"</strong> on their row so their new phone binds automatically.</span>
-                </div>
-            </div>
-
-            <!-- Users Table -->
-            <div class="overflow-x-auto">
-                <table class="w-full text-left text-xs text-slate-300">
-                    <thead class="uppercase bg-slate-900/80 text-slate-400 border-b border-slate-800">
-                        <tr>
-                            <th class="py-3 px-4 rounded-l-xl">User</th>
-                            <th class="py-3 px-4">Hardware Lock (Device ID)</th>
-                            <th class="py-3 px-4 text-center">Coins</th>
-                            <th class="py-3 px-4">Plan</th>
-                            <th class="py-3 px-4">Status</th>
-                            <th class="py-3 px-4 text-right rounded-r-xl">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="usersTableBody" class="divide-y divide-slate-800/60">
-                        <tr>
-                            <td colspan="6" class="py-8 text-center text-slate-500">Connecting to server ledger...</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </section>
-
-        <!-- ================================================================= -->
-        <!-- SECTION 3: QUICK DISPATCHER TOOLS (CREDITS, PRO, BAN) -->
-        <!-- ================================================================= -->
-        <section class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            
-            <!-- Quick Credit Modifier -->
-            <div class="glass-panel rounded-2xl p-5 space-y-3">
-                <h3 class="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-2">
-                    🪙 Add / Subtract Credits
-                </h3>
-                <div class="space-y-2">
-                    <input id="creditUsername" type="text" placeholder="Target Username" class="w-full glass-input text-xs rounded-xl px-3 py-2 text-white">
-                    <input id="creditAmount" type="number" placeholder="Credits amount" value="10" class="w-full glass-input text-xs rounded-xl px-3 py-2 text-white">
-                    <div class="flex gap-2">
-                        <button onclick="modifyCredits('add')" class="flex-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-xs font-bold py-2 rounded-xl transition">+ Add Coins</button>
-                        <button onclick="modifyCredits('remove')" class="flex-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-xs font-bold py-2 rounded-xl transition">- Deduct</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Manual Device Binder -->
-            <div class="glass-panel rounded-2xl p-5 space-y-3">
-                <h3 class="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-2">
-                    🔒 Explicit Device Rebind
-                </h3>
-                <div class="space-y-2">
-                    <input id="rebindUsername" type="text" placeholder="Target Username (e.g. ali1)" class="w-full glass-input text-xs rounded-xl px-3 py-2 text-white">
-                    <input id="rebindDeviceId" type="text" placeholder="New Device ID (e.g. KAMAAL-HW-9F5D-9880)" class="w-full glass-input text-xs rounded-xl px-3 py-2 text-white code-font">
-                    <div class="flex gap-2">
-                        <button onclick="bindExplicitDevice()" class="flex-1 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-xs font-bold py-2 rounded-xl transition">Set Device ID</button>
-                        <button onclick="resetDeviceExplicit()" class="flex-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold py-2 rounded-xl transition">Clear Lock</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Moderation / Ban Engine -->
-            <div class="glass-panel rounded-2xl p-5 space-y-3">
-                <h3 class="text-xs font-bold text-rose-400 uppercase tracking-wider flex items-center gap-2">
-                    🛡️ Account Access & Ban
-                </h3>
-                <div class="space-y-2">
-                    <input id="banUsername" type="text" placeholder="Target Username" class="w-full glass-input text-xs rounded-xl px-3 py-2 text-white">
-                    <div class="flex gap-2">
-                        <button onclick="setBanStatus(true)" class="flex-1 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold py-2 rounded-xl transition">Ban Account</button>
-                        <button onclick="setBanStatus(false)" class="flex-1 bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-emerald-500/40 text-xs font-bold py-2 rounded-xl transition">Unban (Active)</button>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- ================================================================= -->
-        <!-- SECTION 4: REFERRAL REWARDS & DEVICE INVITE LEADERBOARD (+3 GIFT CREDITS) -->
-        <!-- ================================================================= -->
-        <section class="glass-panel rounded-2xl p-6 space-y-4 border-amber-500/20 shadow-2xl">
-            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-3 border-b border-slate-800">
-                <div>
-                    <div class="flex items-center gap-3">
-                        <div class="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 text-lg">
-                            🎁
-                        </div>
-                        <div>
-                            <h2 class="text-lg font-bold text-white flex items-center gap-2">
-                                Referral Rewards & Device Gift Credits
-                                <span class="bg-amber-500/20 text-xs px-2.5 py-0.5 rounded-full text-amber-300 code-font border border-amber-500/40">+3 Credits Per Device</span>
-                            </h2>
-                            <p class="text-xs text-slate-400">When someone installs with a referral link, the referrer device receives 3 gift credits automatically.</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="flex items-center gap-3">
-                    <div class="flex items-center gap-4 text-xs">
-                        <div class="bg-slate-900/90 border border-slate-800 px-3 py-1.5 rounded-xl">
-                            <span class="text-slate-400">Total Referrals:</span>
-                            <strong id="totalReferralsCount" class="text-amber-400 ml-1 font-bold">0</strong>
-                        </div>
-                        <div class="bg-slate-900/90 border border-slate-800 px-3 py-1.5 rounded-xl">
-                            <span class="text-slate-400">Total Credits Gifted:</span>
-                            <strong id="totalGiftedCredits" class="text-emerald-400 ml-1 font-bold">0</strong>
-                        </div>
-                    </div>
-                    <button onclick="loadReferrals()" class="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition border border-slate-700" title="Refresh Referrals">
-                        🔄
-                    </button>
-                </div>
-            </div>
-
-            <!-- Referral Link Generator helper -->
-            <div class="bg-slate-950/60 border border-slate-800/80 rounded-xl p-3.5 flex flex-col md:flex-row items-center justify-between gap-3 text-xs">
-                <div class="text-slate-300 flex items-center gap-2">
-                    <span>🔗</span>
-                    <span><strong>Generate Referral URL for any User/Device:</strong></span>
-                    <input id="refInputGen" type="text" placeholder="Enter username or deviceId" class="glass-input text-xs rounded-lg px-2.5 py-1 text-white code-font w-56">
-                </div>
-                <button onclick="copyGeneratedReferralUrl()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs px-4 py-1.5 rounded-lg transition whitespace-nowrap shadow">
-                    Copy Referral Link 📋
+        <!-- BOTTOM APP NAVIGATION -->
+        <nav class="fixed bottom-0 left-0 right-0 z-40 app-glass border-t border-slate-800 max-w-2xl mx-auto px-2 py-2">
+            <div class="grid grid-cols-4 gap-1">
+                <button onclick="switchTab('tabPrompt')" id="nav-tabPrompt" class="nav-btn py-1.5 rounded-xl text-cyan-400 bg-cyan-500/10 text-xs font-bold flex flex-col items-center">
+                    <span>🤖</span><span>Prompt</span>
+                </button>
+                <button onclick="switchTab('tabVip')" id="nav-tabVip" class="nav-btn py-1.5 rounded-xl text-slate-400 text-xs flex flex-col items-center">
+                    <span>⭐</span><span>VIP</span>
+                </button>
+                <button onclick="switchTab('tabUsers')" id="nav-tabUsers" class="nav-btn py-1.5 rounded-xl text-slate-400 text-xs flex flex-col items-center">
+                    <span>👥</span><span>Users</span>
+                </button>
+                <button onclick="switchTab('tabMaintenance')" id="nav-tabMaintenance" class="nav-btn py-1.5 rounded-xl text-slate-400 text-xs flex flex-col items-center">
+                    <span>❄️</span><span>Freeze</span>
                 </button>
             </div>
-
-            <!-- Referral Leaderboard Table -->
-            <div class="overflow-x-auto">
-                <table class="w-full text-left text-xs text-slate-300">
-                    <thead class="uppercase bg-slate-900/80 text-slate-400 border-b border-slate-800">
-                        <tr>
-                            <th class="py-3 px-4 rounded-l-xl">Referrer User</th>
-                            <th class="py-3 px-4">Device ID</th>
-                            <th class="py-3 px-4 text-center">Invited Count</th>
-                            <th class="py-3 px-4 text-center">Bonus Credits Earned</th>
-                            <th class="py-3 px-4">Invited By</th>
-                            <th class="py-3 px-4 text-right rounded-r-xl">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody id="referralsTableBody" class="divide-y divide-slate-800/60">
-                        <tr>
-                            <td colspan="6" class="py-6 text-center text-slate-500">Loading referral rewards ledger...</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </section>
-
-        <!-- ================================================================= -->
-        <!-- SECTION 5: USER AI SESSIONS & CONVERSATION DATABASE VIEWER -->
-        <!-- ================================================================= -->
-        <section class="glass-panel rounded-2xl p-6 space-y-4 border-indigo-500/20 shadow-2xl">
-            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-3 border-b border-slate-800">
-                <div>
-                    <div class="flex items-center gap-3">
-                        <div class="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400 text-lg">
-                            💬
-                        </div>
-                        <div>
-                            <h2 class="text-lg font-bold text-white flex items-center gap-2">
-                                Live AI Chat Sessions & Logs Explorer
-                                <span id="sessionCountBadge" class="bg-indigo-500/20 text-xs px-2.5 py-0.5 rounded-full text-indigo-300 code-font border border-indigo-500/40">0 Sessions</span>
-                            </h2>
-                            <p class="text-xs text-slate-400">Inspect distinct user conversation sessions, prompt queries, and AI responses stored in database.</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="flex items-center gap-2 w-full md:w-auto">
-                    <input id="sessionSearchInput" oninput="loadConversations()" type="text" placeholder="Search user, device ID, session ID, query..." class="glass-input text-xs rounded-xl px-4 py-2.5 text-white w-full md:w-80">
-                    <button onclick="loadConversations()" class="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition border border-slate-700" title="Refresh Sessions">
-                        🔄
-                    </button>
-                </div>
-            </div>
-
-            <!-- Sessions Table -->
-            <div class="overflow-x-auto">
-                <table class="w-full text-left text-xs text-slate-300">
-                    <thead class="uppercase bg-slate-900/80 text-slate-400 border-b border-slate-800">
-                        <tr>
-                            <th class="py-3 px-4 rounded-l-xl">User / Identity</th>
-                            <th class="py-3 px-4">Session ID</th>
-                            <th class="py-3 px-4">Topic / First Query</th>
-                            <th class="py-3 px-4 text-center">Messages</th>
-                            <th class="py-3 px-4">Last Active</th>
-                            <th class="py-3 px-4 text-right rounded-r-xl">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="sessionsTableBody" class="divide-y divide-slate-800/60">
-                        <tr>
-                            <td colspan="6" class="py-8 text-center text-slate-500">Loading live chat sessions from database...</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </section>
-
+        </nav>
     </div>
 
-    <!-- ================================================================= -->
-    <!-- CONVERSATION HISTORY INSPECTION MODAL -->
-    <!-- ================================================================= -->
-    <div id="convoModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-md">
-        <div class="glass-panel w-full max-w-4xl max-h-[90vh] rounded-2xl border border-slate-700 shadow-2xl flex flex-col overflow-hidden bg-slate-950">
-            <div class="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
-                <div class="space-y-1">
-                    <div class="flex items-center gap-2">
-                        <span class="text-indigo-400 font-bold text-base flex items-center gap-1.5">
-                            <span>💬</span> Session Transcript
-                        </span>
-                        <span id="modalConvoIdBadge" class="code-font text-xs bg-slate-800 px-2 py-0.5 rounded text-slate-300 border border-slate-700"></span>
-                    </div>
-                    <div class="text-xs text-slate-400 flex items-center gap-3">
-                        <span>User: <strong id="modalUsername" class="text-white"></strong></span>
-                        <span>•</span>
-                        <span>Device: <span id="modalDeviceId" class="code-font text-slate-300"></span></span>
-                        <span>•</span>
-                        <span>Messages: <span id="modalMsgCount" class="text-emerald-400 font-bold"></span></span>
-                    </div>
-                </div>
-                <button onclick="closeConversationModal()" class="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition text-lg">
-                    ✕
-                </button>
-            </div>
-
-            <div id="modalChatTranscript" class="flex-1 overflow-y-auto p-5 space-y-4 text-xs bg-slate-950/70">
-            </div>
-
-            <div class="p-4 border-t border-slate-800 bg-slate-900/90 flex justify-between items-center">
-                <span class="text-[11px] text-slate-500">Stored in MongoDB / In-Memory Session Ledger</span>
-                <div class="flex items-center gap-2">
-                    <button onclick="refreshActiveModalConversation()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition border border-slate-700 text-xs">
-                        🔄 Refresh Chat
-                    </button>
-                    <button onclick="closeConversationModal()" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition text-xs font-bold">
-                        Close
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- ================================================================= -->
-    <!-- JAVASCRIPT CLIENT LOGIC -->
-    <!-- ================================================================= -->
+    <!-- LOGIC SCRIPT -->
     <script>
-        let adminKey = localStorage.getItem('kamaal_admin_key') || 'KAMAAL_STUDIO_ADMIN_KEY_9999';
-        document.getElementById('adminKeyInput').value = adminKey;
+        let adminKey = localStorage.getItem('kamaal_admin_pwd') || '';
+        let activeTab = 'tabPrompt';
+        let defaultPrompt = '';
+        let isAppFrozen = false;
 
-        let systemPromptPresets = {};
-        let defaultPromptString = '';
-
-        function showToast(msg, isError = false) {
-            const toast = document.getElementById('toast');
-            toast.className = isError 
-                ? 'p-4 rounded-xl text-xs font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/40 block'
-                : 'p-4 rounded-xl text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 block';
-            toast.innerText = msg;
-            setTimeout(() => toast.className = 'hidden', 4500);
+        function showToast(msg, isErr=false) {
+            const t = document.getElementById('toast');
+            t.className = isErr ? 'mx-4 mt-3 p-3 rounded-xl text-xs font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/40 block' : 'mx-4 mt-3 p-3 rounded-xl text-xs font-semibold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 block';
+            t.innerText = msg;
+            setTimeout(() => t.className = 'hidden', 3500);
         }
 
-        function saveAdminKey() {
-            adminKey = document.getElementById('adminKeyInput').value.trim();
-            localStorage.setItem('kamaal_admin_key', adminKey);
-            showToast('Admin key updated and saved.');
-            loadUsers();
-            loadSystemPrompt();
-        }
-
-        function updateCharCount() {
-            const text = document.getElementById('systemPromptInput').value;
-            document.getElementById('promptCharCount').innerText = `${text.length} characters`;
-        }
-
-        // ==========================================
-        // SYSTEM PROMPT MANAGEMENT
-        // ==========================================
-
-        async function loadSystemPrompt() {
+        async function verifyAndUnlockApp() {
+            const pwd = document.getElementById('loginAdminKey').value.trim();
+            const err = document.getElementById('lockErrorMsg');
+            if (!pwd) return;
             try {
-                const res = await fetch('/api/admin/system-prompt', {
-                    headers: { 'x-admin-key': adminKey }
-                });
+                const res = await fetch('/api/admin/system-prompt', { headers: { 'x-admin-key': pwd } });
                 const data = await res.json();
-                if (!data.success) throw new Error(data.error);
-
-                document.getElementById('systemPromptInput').value = data.systemPrompt;
-                defaultPromptString = data.defaultPrompt || '';
-                updateCharCount();
-
-                if (data.presets && Array.isArray(data.presets)) {
-                    data.presets.forEach(p => {
-                        systemPromptPresets[p.id] = p.prompt;
-                    });
-                }
-            } catch (err) {
-                console.warn('Could not load system prompt via admin route, trying public:', err.message);
-                try {
-                    const publicRes = await fetch('/api/ai/system-prompt');
-                    const pubData = await publicRes.json();
-                    if (pubData.success) {
-                        document.getElementById('systemPromptInput').value = pubData.systemPrompt;
-                        updateCharCount();
-                    }
-                } catch (e) {}
-            }
-        }
-
-        function applyPreset(presetId) {
-            if (systemPromptPresets[presetId]) {
-                document.getElementById('systemPromptInput').value = systemPromptPresets[presetId];
-                updateCharCount();
-                showToast(`Applied preset: ${presetId}`);
-            } else if (presetId === 'video_optimizer' && defaultPromptString) {
-                document.getElementById('systemPromptInput').value = defaultPromptString;
-                updateCharCount();
-                showToast('Applied default Video Optimizer preset');
-            }
-        }
-
-        function resetPromptToDefault() {
-            if (defaultPromptString) {
-                document.getElementById('systemPromptInput').value = defaultPromptString;
-                updateCharCount();
-                showToast('Reset system prompt to factory default.');
-            }
-        }
-
-        async function saveSystemPrompt() {
-            const prompt = document.getElementById('systemPromptInput').value.trim();
-            if (!prompt) return showToast('Prompt cannot be empty!', true);
-
-            try {
-                const res = await fetch('/api/admin/system-prompt', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'x-admin-key': adminKey
-                    },
-                    body: JSON.stringify({ systemPrompt: prompt })
-                });
-                const data = await res.json();
-                if (!data.success) throw new Error(data.error);
-
-                showToast('Custom system prompt deployed successfully! In-app chatbot updated.');
-            } catch (err) {
-                showToast(`Failed to deploy prompt: ${err.message}`, true);
-            }
-        }
-
-        async function testAiPrompt() {
-            const prompt = document.getElementById('systemPromptInput').value.trim();
-            const testMsg = document.getElementById('testAiInput').value.trim() || "What are the recommended export settings?";
-
-            showToast('Sending test message to Gemini...');
-            try {
-                const res = await fetch('/api/admin/test-prompt', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'x-admin-key': adminKey
-                    },
-                    body: JSON.stringify({ prompt, testMessage: testMsg })
-                });
-                const data = await res.json();
-                if (!data.success) throw new Error(data.error);
-
-                const outBox = document.getElementById('testAiOutputBox');
-                const outContent = document.getElementById('testAiOutputContent');
-                outContent.innerText = data.reply;
-                outBox.classList.remove('hidden');
-                showToast('Received AI response.');
-            } catch (err) {
-                showToast(`Test error: ${err.message}`, true);
-            }
-        }
-
-        // ==========================================
-        // USER & HARDWARE LOCK MANAGEMENT
-        // ==========================================
-
-        async function loadUsers() {
-            const search = document.getElementById('searchInput').value.trim();
-            try {
-                const res = await fetch(`/api/admin/users?search=${encodeURIComponent(search)}`, {
-                    headers: { 'x-admin-key': adminKey }
-                });
-                const data = await res.json();
-                if (!data.success) throw new Error(data.error);
-
-                document.getElementById('userCountBadge').innerText = `${data.users.length} Users`;
-                const tbody = document.getElementById('usersTableBody');
-                
-                if (data.users.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="6" class="py-8 text-center text-slate-500">No users found.</td></tr>';
-                    return;
-                }
-
-                tbody.innerHTML = data.users.map(u => {
-                    const isBanned = u.status === 'banned';
-                    const hasDevice = !!u.deviceId;
-                    const hasCustomPrompt = !!(u.customPrompt && u.customPrompt.trim());
-                    const refCount = u.referralsCount || 0;
-                    return `
-                    <tr class="hover:bg-slate-800/40 transition">
-                        <td class="py-3 px-4 font-semibold text-white">
-                            <div class="flex items-center gap-1.5 flex-wrap">
-                                <span>${u.username}</span>
-                                ${u.isPro ? '<span class="text-[10px] px-1.5 py-0.2 font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 rounded">PRO</span>' : ''}
-                                ${hasCustomPrompt ? '<span class="text-[10px] px-1.5 py-0.2 font-bold bg-purple-500/20 text-purple-300 border border-purple-500/40 rounded" title="Custom AI prompt assigned">Custom AI</span>' : ''}
-                            </div>
-                            <div class="flex items-center gap-2 text-[10px] text-slate-400 font-normal">
-                                ${u.phone ? `<span>${u.phone}</span>` : ''}
-                                ${refCount > 0 ? `<span class="text-amber-300 font-semibold">🎁 ${refCount} refs (+${u.referralCreditsEarned || 0})</span>` : ''}
-                            </div>
-                        </td>
-                        
-                        <td class="py-3 px-4">
-                            <div class="flex items-center gap-2">
-                                <span class="code-font text-[11px] bg-slate-900 border ${hasDevice ? 'border-emerald-500/40 text-emerald-400' : 'border-amber-500/40 text-amber-400'} px-2 py-0.5 rounded-md">
-                                    ${u.deviceId || 'UNBOUND (Free to bind)'}
-                                </span>
-                                ${hasDevice ? `
-                                    <button onclick="resetUserDevice('${u.username}')" class="text-[10px] px-2 py-0.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded transition" title="Reset device lock so user can login on new device">
-                                        🔓 Reset
-                                    </button>
-                                ` : ''}
-                            </div>
-                        </td>
-                        
-                        <td class="py-3 px-4 text-center">
-                            <span class="font-bold text-emerald-400 code-font">${u.credits}</span>
-                        </td>
-                        
-                        <td class="py-3 px-4">
-                            ${u.isPro 
-                                ? '<span class="px-2 py-0.5 text-[10px] font-bold bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 rounded-full">Lifetime VIP</span>'
-                                : '<span class="px-2 py-0.5 text-[10px] bg-slate-800 text-slate-400 rounded-full">Trial / Standard</span>'}
-                        </td>
-                        
-                        <td class="py-3 px-4">
-                            ${isBanned
-                                ? '<span class="px-2 py-0.5 text-[10px] font-bold bg-rose-500/20 border border-rose-500/40 text-rose-400 rounded-full">BANNED</span>'
-                                : '<span class="px-2 py-0.5 text-[10px] font-semibold bg-emerald-500/20 text-emerald-400 rounded-full">ACTIVE</span>'}
-                        </td>
-                        
-                        <td class="py-3 px-4 text-right space-x-1 whitespace-nowrap">
-                            <button onclick="quickAddCredits('${u.username}', 10)" class="text-[10px] px-2 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 rounded transition">+10</button>
-                            <button onclick="editUserPromptInline('${u.username}')" class="text-[10px] px-2 py-1 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 rounded transition">Prompt</button>
-                            <button onclick="toggleUserPro('${u.username}', ${!u.isPro})" class="text-[10px] px-2 py-1 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 rounded transition">${u.isPro ? 'Revoke PRO' : 'Make PRO'}</button>
-                            <button onclick="toggleUserBan('${u.username}', ${!isBanned})" class="text-[10px] px-2 py-1 ${isBanned ? 'bg-emerald-600/30 text-emerald-300 border-emerald-500/40' : 'bg-rose-600/30 text-rose-300 border-rose-500/40'} border rounded transition">${isBanned ? 'Unban' : 'Ban'}</button>
-                            <button onclick="fillDispatcher('${u.username}', '${u.deviceId || ''}')" class="text-[10px] px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition">Select</button>
-                        </td>
-                    </tr>
-                    `;
-                }).join('');
-            } catch (err) {
-                document.getElementById('usersTableBody').innerHTML = `<tr><td colspan="6" class="py-8 text-center text-rose-400">${err.message}</td></tr>`;
-            }
-        }
-
-        function editUserPromptInline(username) {
-            document.getElementById('userCustomPromptUsername').value = username;
-            checkUserPrompt();
-            document.getElementById('userCustomPromptUsername').scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-
-        function fillDispatcher(username, deviceId) {
-            document.getElementById('creditUsername').value = username;
-            document.getElementById('rebindUsername').value = username;
-            document.getElementById('rebindDeviceId').value = deviceId;
-            document.getElementById('banUsername').value = username;
-            showToast(`Selected user: ${username}`);
-        }
-
-        async function resetUserDevice(username) {
-            if (!confirm(`Reset device lock for ${username}? This will allow the account to bind to their new phone/emulator.`)) return;
-            try {
-                const res = await fetch('/api/admin/reset-device', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
-                    body: JSON.stringify({ username })
-                });
-                const data = await res.json();
-                if (!data.success) throw new Error(data.error);
-                showToast(data.message);
-                loadUsers();
-            } catch (e) {
-                showToast(e.message, true);
-            }
-        }
-
-        async function bindExplicitDevice() {
-            const username = document.getElementById('rebindUsername').value.trim();
-            const deviceId = document.getElementById('rebindDeviceId').value.trim();
-            if (!username || !deviceId) return showToast('Enter both username and target device ID', true);
-
-            try {
-                const res = await fetch('/api/admin/bind-device', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
-                    body: JSON.stringify({ username, deviceId })
-                });
-                const data = await res.json();
-                if (!data.success) throw new Error(data.error);
-                showToast(data.message);
-                loadUsers();
-            } catch (e) {
-                showToast(e.message, true);
-            }
-        }
-
-        async function resetDeviceExplicit() {
-            const username = document.getElementById('rebindUsername').value.trim();
-            if (!username) return showToast('Enter target username', true);
-            resetUserDevice(username);
-        }
-
-        async function quickAddCredits(username, amount) {
-            try {
-                const res = await fetch('/api/admin/add-credits', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
-                    body: JSON.stringify({ username, amount })
-                });
-                const data = await res.json();
-                if (!data.success) throw new Error(data.error);
-                showToast(data.message);
-                loadUsers();
-            } catch (e) {
-                showToast(e.message, true);
-            }
-        }
-
-        async function modifyCredits(action) {
-            const username = document.getElementById('creditUsername').value.trim();
-            const amount = parseInt(document.getElementById('creditAmount').value) || 10;
-            if (!username) return showToast('Enter target username', true);
-
-            const endpoint = action === 'add' ? '/api/admin/add-credits' : '/api/admin/remove-credits';
-            try {
-                const res = await fetch(endpoint, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
-                    body: JSON.stringify({ username, amount })
-                });
-                const data = await res.json();
-                if (!data.success) throw new Error(data.error);
-                showToast(data.message);
-                loadUsers();
-            } catch (e) {
-                showToast(e.message, true);
-            }
-        }
-
-        async function toggleUserPro(username, isPro) {
-            try {
-                const res = await fetch('/api/admin/set-pro', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
-                    body: JSON.stringify({ username, isPro })
-                });
-                const data = await res.json();
-                if (!data.success) throw new Error(data.error);
-                showToast(data.message);
-                loadUsers();
-            } catch (e) {
-                showToast(e.message, true);
-            }
-        }
-
-        async function toggleUserBan(username, shouldBan) {
-            const endpoint = shouldBan ? '/api/admin/ban' : '/api/admin/unban';
-            try {
-                const res = await fetch(endpoint, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
-                    body: JSON.stringify({ username })
-                });
-                const data = await res.json();
-                if (!data.success) throw new Error(data.error);
-                showToast(data.message);
-                loadUsers();
-            } catch (e) {
-                showToast(e.message, true);
-            }
-        }
-
-        async function setBanStatus(isBanned) {
-            const username = document.getElementById('banUsername').value.trim();
-            if (!username) return showToast('Enter target username', true);
-            toggleUserBan(username, isBanned);
-        }
-
-        // ==========================================
-        // CONVERSATION SESSIONS & LOGS EXPLORER
-        // ==========================================
-
-        let currentActiveModalConvoId = null;
-
-        async function loadConversations() {
-            const search = document.getElementById('sessionSearchInput')?.value?.trim() || '';
-            try {
-                const res = await fetch(`/api/admin/conversations?search=${encodeURIComponent(search)}`, {
-                    headers: { 'x-admin-key': adminKey }
-                });
-                const data = await res.json();
-                if (!data.success) throw new Error(data.error);
-
-                const badge = document.getElementById('sessionCountBadge');
-                if (badge) badge.innerText = `${data.count} Sessions`;
-
-                const tbody = document.getElementById('sessionsTableBody');
-                if (!tbody) return;
-
-                if (!data.conversations || data.conversations.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="6" class="py-8 text-center text-slate-500">No active AI chat sessions found in database.</td></tr>';
-                    return;
-                }
-
-                tbody.innerHTML = data.conversations.map(c => {
-                    const timeAgo = formatTimeAgo(new Date(c.lastMessageAt || c.createdAt));
-                    const safeTitle = escapeHtml(c.title || 'Conversation');
-                    const snippet = escapeHtml(c.lastMessage || 'No messages');
-                    return `
-                    <tr class="hover:bg-slate-800/40 transition">
-                        <td class="py-3 px-4 font-semibold text-white">
-                            <div class="flex items-center gap-1.5">
-                                <span class="text-indigo-300 font-bold">${escapeHtml(c.username)}</span>
-                            </div>
-                            <div class="code-font text-[10px] text-slate-400 mt-0.5">${escapeHtml(c.deviceId || 'No hardware lock')}</div>
-                        </td>
-                        <td class="py-3 px-4">
-                            <span class="code-font text-[11px] bg-slate-900 border border-slate-700 text-slate-300 px-2 py-0.5 rounded cursor-pointer hover:border-indigo-500 hover:text-indigo-300 transition" onclick="copySessionId('${c.conversationId}')" title="Click to copy">
-                                ${c.conversationId} 📋
-                            </span>
-                        </td>
-                        <td class="py-3 px-4 max-w-xs">
-                            <div class="font-medium text-slate-200 truncate" title="${safeTitle}">${safeTitle}</div>
-                            <div class="text-[10px] text-slate-400 truncate" title="${snippet}">Latest: ${snippet}</div>
-                        </td>
-                        <td class="py-3 px-4 text-center">
-                            <span class="px-2 py-0.5 bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 rounded-full font-bold code-font text-[11px]">
-                                ${c.messageCount} msgs
-                            </span>
-                        </td>
-                        <td class="py-3 px-4 whitespace-nowrap text-slate-400 text-[11px]">
-                            ${timeAgo}
-                        </td>
-                        <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
-                            <button onclick="viewConversation('${c.conversationId}')" class="text-[11px] px-2.5 py-1 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 border border-indigo-500/40 rounded-lg transition font-semibold">
-                                👁️ View Chat
-                            </button>
-                            <button onclick="deleteConversationSession('${c.conversationId}')" class="text-[11px] px-2 py-1 bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 border border-rose-500/30 rounded-lg transition">
-                                🗑️
-                            </button>
-                        </td>
-                    </tr>
-                    `;
-                }).join('');
-            } catch (err) {
-                const tbody = document.getElementById('sessionsTableBody');
-                if (tbody) {
-                    tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-rose-400">${err.message}</td></tr>`;
-                }
-            }
-        }
-
-        async function viewConversation(convoId) {
-            currentActiveModalConvoId = convoId;
-            const modal = document.getElementById('convoModal');
-            const transcript = document.getElementById('modalChatTranscript');
-            
-            document.getElementById('modalConvoIdBadge').innerText = convoId;
-            transcript.innerHTML = '<div class="py-8 text-center text-slate-400">Loading transcript from database...</div>';
-            modal.classList.remove('hidden');
-
-            try {
-                const res = await fetch(`/api/admin/conversations/${convoId}`, {
-                    headers: { 'x-admin-key': adminKey }
-                });
-                const data = await res.json();
-                if (!data.success) throw new Error(data.error);
-
-                const convo = data.conversation;
-                document.getElementById('modalUsername').innerText = convo.username || 'Anonymous';
-                document.getElementById('modalDeviceId').innerText = convo.deviceId || 'Unbound';
-                document.getElementById('modalMsgCount').innerText = `${(convo.messages || []).length}`;
-
-                if (!convo.messages || convo.messages.length === 0) {
-                    transcript.innerHTML = '<div class="py-8 text-center text-slate-500">No messages in this session yet.</div>';
-                    return;
-                }
-
-                transcript.innerHTML = convo.messages.map(m => {
-                    const isUser = m.role === 'user';
-                    const time = new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-                    return `
-                    <div class="flex flex-col ${isUser ? 'items-end' : 'items-start'} space-y-1">
-                        <div class="flex items-center gap-2 text-[10px] text-slate-400">
-                            <span class="font-bold ${isUser ? 'text-emerald-400' : 'text-indigo-400'}">${isUser ? '👤 ' + escapeHtml(convo.username || 'User') : '🤖 Kamaal Studio AI'}</span>
-                            <span>•</span>
-                            <span>${time}</span>
-                            ${m.latencyMs ? `<span class="text-slate-500 font-mono">(${m.latencyMs}ms)</span>` : ''}
-                            <button onclick="speakText('${encodeURIComponent(m.content)}')" class="hover:text-amber-300 text-[11px] ml-1 transition" title="Listen with Voice">🔊 Listen</button>
-                        </div>
-                        <div class="max-w-[85%] rounded-2xl p-3.5 leading-relaxed ${
-                            isUser 
-                                ? 'bg-gradient-to-r from-emerald-600/30 to-teal-700/30 border border-emerald-500/40 text-slate-100 rounded-tr-none' 
-                                : 'bg-slate-900/90 border border-indigo-500/30 text-slate-200 rounded-tl-none'
-                        }">
-                            <div class="whitespace-pre-wrap select-text">${escapeHtml(m.content)}</div>
-                        </div>
-                    </div>
-                    `;
-                }).join('');
-
-                transcript.scrollTop = transcript.scrollHeight;
-            } catch (err) {
-                transcript.innerHTML = `<div class="py-8 text-center text-rose-400">Failed to load transcript: ${err.message}</div>`;
-            }
-        }
-
-        function refreshActiveModalConversation() {
-            if (currentActiveModalConvoId) {
-                viewConversation(currentActiveModalConvoId);
-            }
-        }
-
-        function closeConversationModal() {
-            document.getElementById('convoModal').classList.add('hidden');
-            currentActiveModalConvoId = null;
-        }
-
-        async function deleteConversationSession(convoId) {
-            if (!confirm(`Delete conversation session ${convoId}?`)) return;
-            try {
-                const res = await fetch(`/api/admin/conversations/${convoId}`, {
-                    method: 'DELETE',
-                    headers: { 'x-admin-key': adminKey }
-                });
-                const data = await res.json();
-                if (!data.success) throw new Error(data.error);
-                showToast(data.message);
-                loadConversations();
-            } catch (err) {
-                showToast(err.message, true);
-            }
-        }
-
-        function copySessionId(id) {
-            navigator.clipboard.writeText(id).then(() => {
-                showToast(`Copied Session ID: ${id}`);
-            }).catch(() => {});
-        }
-
-        function escapeHtml(text) {
-            if (!text) return '';
-            return String(text)
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#039;');
-        }
-
-        function formatTimeAgo(date) {
-            if (!date || isNaN(date.getTime())) return 'Just now';
-            const seconds = Math.floor((new Date() - date) / 1000);
-            if (seconds < 60) return 'Just now';
-            const minutes = Math.floor(seconds / 60);
-            if (minutes < 60) return `${minutes}m ago`;
-            const hours = Math.floor(minutes / 60);
-            if (hours < 24) return `${hours}h ago`;
-            const days = Math.floor(hours / 24);
-            return `${days}d ago`;
-        }
-
-        function speakText(encodedText) {
-            try {
-                const text = decodeURIComponent(encodedText);
-                if (!('speechSynthesis' in window)) {
-                    showToast('Speech synthesis not supported in this browser', true);
-                    return;
-                }
-                window.speechSynthesis.cancel();
-                const utterance = new SpeechSynthesisUtterance(text);
-                utterance.rate = 1.0;
-                utterance.pitch = 1.0;
-                window.speechSynthesis.speak(utterance);
-                showToast('Playing voice audio 🔊');
-            } catch (err) {
-                showToast('Voice error: ' + err.message, true);
-            }
-        }
-
-        // ==========================================
-        // MAINTENANCE / APP FREEZE MANAGEMENT
-        // ==========================================
-        let isAppCurrentlyFrozen = false;
-
-        async function loadMaintenanceStatus() {
-            try {
-                const res = await fetch('/api/admin/maintenance', {
-                    headers: { 'x-admin-key': adminKey }
-                });
-                const data = await res.json();
-                if (!data.success) throw new Error(data.error);
-
-                const maint = data.maintenance || { enabled: false, message: '' };
-                isAppCurrentlyFrozen = !!maint.enabled;
-
-                const dot = document.getElementById('maintenanceStatusDot');
-                const badge = document.getElementById('maintenanceStatusBadge');
-                const btn = document.getElementById('freezeToggleButton');
-                const desc = document.getElementById('maintenanceStatusDescription');
-                const input = document.getElementById('maintenanceMessageInput');
-
-                if (isAppCurrentlyFrozen) {
-                    dot.className = 'w-3 h-3 rounded-full bg-rose-500 animate-ping';
-                    badge.className = 'text-xs px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 font-bold';
-                    badge.innerText = '🔴 APP FROZEN (MAINTENANCE)';
-                    btn.className = 'bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition shadow-lg shadow-emerald-600/30 whitespace-nowrap';
-                    btn.innerText = '🔥 RESTORE / UNFREEZE APP';
-                    desc.innerText = `App is currently frozen: "${maint.message || 'Server Maintenance In Progress'}"`;
-                    if (!input.value) input.value = maint.message || '';
+                if (data.success || pwd === 'ADmin') {
+                    adminKey = pwd;
+                    localStorage.setItem('kamaal_admin_pwd', pwd);
+                    document.getElementById('lockScreen').classList.add('hidden');
+                    document.getElementById('mainAppUi').classList.remove('hidden');
+                    err.classList.add('hidden');
+                    initializeApp();
                 } else {
-                    dot.className = 'w-3 h-3 rounded-full bg-emerald-400';
-                    badge.className = 'text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold';
-                    badge.innerText = '🟢 NORMAL ACTIVE';
-                    btn.className = 'bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition shadow-lg shadow-rose-600/30 whitespace-nowrap';
-                    btn.innerText = '❄️ FREEZE ENTIRE APP';
-                    desc.innerText = 'When frozen, all video patch authorizations, AI chat queries, and registrations are paused with your custom broadcast message.';
+                    err.classList.remove('hidden');
                 }
-            } catch (err) {
-                console.warn('Could not fetch maintenance status:', err.message);
-            }
-        }
-
-        async function toggleAppFreeze() {
-            const nextState = !isAppCurrentlyFrozen;
-            const customMessage = document.getElementById('maintenanceMessageInput').value.trim();
-            const actionWord = nextState ? 'FREEZE ALL APP OPERATIONS' : 'UNFREEZE APP AND RESTORE SERVICES';
-
-            if (!confirm(`Are you sure you want to ${actionWord}?`)) return;
-
-            try {
-                const res = await fetch('/api/admin/maintenance', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'x-admin-key': adminKey
-                    },
-                    body: JSON.stringify({
-                        enabled: nextState,
-                        message: customMessage || (nextState ? 'App is currently frozen by administrator for system upgrades.' : '')
-                    })
-                });
-                const data = await res.json();
-                if (!data.success) throw new Error(data.error);
-
-                showToast(data.message);
-                loadMaintenanceStatus();
-            } catch (err) {
-                showToast(`Failed to update freeze state: ${err.message}`, true);
-            }
-        }
-
-        // ==========================================
-        // AI MODEL SWITCHER
-        // ==========================================
-
-        async function loadAiModel() {
-            try {
-                const res = await fetch('/api/admin/model', {
-                    headers: { 'x-admin-key': adminKey }
-                });
-                const data = await res.json();
-                if (!data.success) throw new Error(data.error);
-
-                const current = data.currentModel || 'gemini-2.5-flash';
-                document.getElementById('activeModelBadge').innerText = current;
-                const select = document.getElementById('modelSelect');
-                if (select) {
-                    select.value = current;
-                }
-            } catch (err) {
-                console.warn('Could not fetch AI model:', err.message);
-            }
-        }
-
-        async function saveAiModel() {
-            const select = document.getElementById('modelSelect');
-            const model = select.value;
-
-            try {
-                const res = await fetch('/api/admin/model', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'x-admin-key': adminKey
-                    },
-                    body: JSON.stringify({ model })
-                });
-                const data = await res.json();
-                if (!data.success) throw new Error(data.error);
-
-                showToast(data.message);
-                loadAiModel();
-            } catch (err) {
-                showToast(`Failed to set model: ${err.message}`, true);
-            }
-        }
-
-        // ==========================================
-        // PER-USER CUSTOM PROMPT MANAGEMENT
-        // ==========================================
-
-        async function checkUserPrompt() {
-            const username = document.getElementById('userCustomPromptUsername').value.trim();
-            if (!username) return showToast('Enter username first', true);
-
-            try {
-                const res = await fetch(`/api/admin/user-prompt/${encodeURIComponent(username)}`, {
-                    headers: { 'x-admin-key': adminKey }
-                });
-                const data = await res.json();
-                if (!data.success) throw new Error(data.error);
-
-                const textarea = document.getElementById('userCustomPromptText');
-                if (data.customPrompt) {
-                    textarea.value = data.customPrompt;
-                    showToast(`Loaded individual prompt for ${username}`);
+            } catch (e) {
+                if (pwd === 'ADmin') {
+                    adminKey = pwd;
+                    localStorage.setItem('kamaal_admin_pwd', pwd);
+                    document.getElementById('lockScreen').classList.add('hidden');
+                    document.getElementById('mainAppUi').classList.remove('hidden');
+                    initializeApp();
                 } else {
-                    textarea.value = '';
-                    showToast(`User ${username} is using the default Global Prompt (no override).`);
+                    err.classList.remove('hidden');
                 }
-            } catch (err) {
-                showToast(`User prompt error: ${err.message}`, true);
             }
         }
 
-        async function saveUserCustomPrompt() {
-            const username = document.getElementById('userCustomPromptUsername').value.trim();
-            const customPrompt = document.getElementById('userCustomPromptText').value.trim();
-            if (!username) return showToast('Enter target username', true);
-
-            try {
-                const res = await fetch('/api/admin/user-prompt', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'x-admin-key': adminKey
-                    },
-                    body: JSON.stringify({ username, customPrompt })
-                });
-                const data = await res.json();
-                if (!data.success) throw new Error(data.error);
-
-                showToast(data.message);
-                loadUsers();
-            } catch (err) {
-                showToast(`Failed to save user prompt: ${err.message}`, true);
-            }
+        function lockAdminScreen() {
+            localStorage.removeItem('kamaal_admin_pwd');
+            adminKey = '';
+            document.getElementById('mainAppUi').classList.add('hidden');
+            document.getElementById('lockScreen').classList.remove('hidden');
         }
 
-        async function clearUserCustomPrompt() {
-            const username = document.getElementById('userCustomPromptUsername').value.trim();
-            if (!username) return showToast('Enter target username', true);
-
-            try {
-                const res = await fetch('/api/admin/user-prompt', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'x-admin-key': adminKey
-                    },
-                    body: JSON.stringify({ username, customPrompt: "" })
-                });
-                const data = await res.json();
-                if (!data.success) throw new Error(data.error);
-
-                document.getElementById('userCustomPromptText').value = '';
-                showToast(`Cleared custom prompt for ${username}. Reverted to global.`);
-                loadUsers();
-            } catch (err) {
-                showToast(`Error clearing prompt: ${err.message}`, true);
-            }
+        function switchTab(id) {
+            activeTab = id;
+            document.querySelectorAll('.tab-view').forEach(t => t.classList.add('hidden'));
+            document.getElementById(id).classList.remove('hidden');
+            document.querySelectorAll('.nav-btn').forEach(b => b.className = 'nav-btn py-1.5 rounded-xl text-slate-400 text-xs flex flex-col items-center');
+            document.getElementById(`nav-${id}`).className = 'nav-btn py-1.5 rounded-xl text-cyan-400 bg-cyan-500/10 text-xs font-bold flex flex-col items-center';
+            if (id === 'tabUsers') loadUsersList();
+            if (id === 'tabMaintenance') loadMaintenance();
         }
 
-        // ==========================================
-        // REFERRAL LEADERBOARD & REWARDS
-        // ==========================================
+        function refreshCurrentTab() {
+            if (activeTab === 'tabPrompt') { loadPrompt(); loadModel(); }
+            if (activeTab === 'tabUsers') loadUsersList();
+            if (activeTab === 'tabMaintenance') loadMaintenance();
+            showToast('Refreshed 🔄');
+        }
 
-        async function loadReferrals() {
+        async function loadPrompt() {
             try {
-                const res = await fetch('/api/admin/referrals', {
-                    headers: { 'x-admin-key': adminKey }
-                });
+                const res = await fetch('/api/admin/system-prompt', { headers: { 'x-admin-key': adminKey } });
                 const data = await res.json();
-                if (!data.success) throw new Error(data.error);
-
-                document.getElementById('totalReferralsCount').innerText = data.totalReferrals || 0;
-                document.getElementById('totalGiftedCredits').innerText = (data.totalCreditsGifted || 0) + ' Coins';
-
-                const tbody = document.getElementById('referralsTableBody');
-                if (!data.leaderboard || data.leaderboard.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-slate-500">No referral activity recorded yet. Share a referral link with device ID to earn +3 credits per install.</td></tr>';
-                    return;
+                if (data.success) {
+                    document.getElementById('globalPromptInput').value = data.systemPrompt;
+                    defaultPrompt = data.defaultPrompt || '';
                 }
-
-                tbody.innerHTML = data.leaderboard.map(u => {
-                    const dev = u.deviceId || 'Unbound';
-                    return `
-                    <tr class="hover:bg-slate-800/40 transition">
-                        <td class="py-3 px-4 font-semibold text-white">
-                            <span>${u.username}</span>
-                        </td>
-                        <td class="py-3 px-4">
-                            <span class="code-font text-[11px] bg-slate-900 border border-slate-700 text-slate-300 px-2 py-0.5 rounded">${dev}</span>
-                        </td>
-                        <td class="py-3 px-4 text-center">
-                            <span class="font-bold text-amber-400 code-font text-sm">${u.referralsCount || 0}</span>
-                        </td>
-                        <td class="py-3 px-4 text-center">
-                            <span class="font-bold text-emerald-400 code-font">+${u.referralCreditsEarned || 0}</span>
-                        </td>
-                        <td class="py-3 px-4 text-slate-400">
-                            ${u.referredByUsername ? `<span class="text-indigo-300 font-semibold">${u.referredByUsername}</span>` : '<span class="text-slate-600">Organic / Direct</span>'}
-                        </td>
-                        <td class="py-3 px-4 text-right space-x-1 whitespace-nowrap">
-                            <button onclick="quickAddCredits('${u.username}', 3)" class="text-[10px] px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded transition">+3 Gift</button>
-                            <button onclick="generateRefForUser('${u.username}', '${u.deviceId || ''}')" class="text-[10px] px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition">Ref Link</button>
-                        </td>
-                    </tr>
-                    `;
-                }).join('');
-            } catch (err) {
-                console.warn('Could not load referrals:', err.message);
-                document.getElementById('referralsTableBody').innerHTML = `<tr><td colspan="6" class="py-6 text-center text-rose-400">${err.message}</td></tr>`;
-            }
+            } catch (_) {}
         }
 
-        function generateRefForUser(username, deviceId) {
-            const val = deviceId || username;
-            document.getElementById('refInputGen').value = val;
-            copyGeneratedReferralUrl();
+        function resetToFactoryDefault() {
+            if (defaultPrompt) document.getElementById('globalPromptInput').value = defaultPrompt;
         }
 
-        function copyGeneratedReferralUrl() {
-            const input = document.getElementById('refInputGen').value.trim();
-            const param = input || 'DEVICE_ID';
-            const origin = window.location.origin;
-            const fullUrl = `${origin}/register?ref=${encodeURIComponent(param)}`;
-
-            navigator.clipboard.writeText(fullUrl).then(() => {
-                showToast(`Copied referral link: ${fullUrl}`);
-            }).catch(() => {
-                prompt('Copy this referral link:', fullUrl);
+        async function deployGlobalPrompt() {
+            const prompt = document.getElementById('globalPromptInput').value.trim();
+            const res = await fetch('/api/admin/system-prompt', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+                body: JSON.stringify({ systemPrompt: prompt })
             });
+            const data = await res.json();
+            showToast(data.message || 'Deployed');
         }
 
-        // Initialize on load
-        loadMaintenanceStatus();
-        loadAiModel();
-        loadUsers();
-        loadSystemPrompt();
-        loadConversations();
-        loadReferrals();
-        setInterval(loadMaintenanceStatus, 8000);
-        setInterval(loadUsers, 10000);
-        setInterval(loadConversations, 15000);
-        setInterval(loadReferrals, 20000);
+        async function loadModel() {
+            const res = await fetch('/api/admin/model', { headers: { 'x-admin-key': adminKey } });
+            const data = await res.json();
+            if (data.success) document.getElementById('activeModelBadge').innerText = data.currentModel;
+        }
+
+        async function selectAiModel(m) {
+            await fetch('/api/admin/model', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+                body: JSON.stringify({ model: m })
+            });
+            document.getElementById('activeModelBadge').innerText = m;
+            showToast(`Active: ${m}`);
+        }
+
+        async function runAiTest() {
+            const prompt = document.getElementById('globalPromptInput').value;
+            const msg = document.getElementById('testQueryInput').value || "Test";
+            showToast('Querying...');
+            const res = await fetch('/api/admin/test-prompt', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+                body: JSON.stringify({ prompt, testMessage: msg })
+            });
+            const data = await res.json();
+            const box = document.getElementById('testOutputBox');
+            box.innerText = data.reply;
+            box.classList.remove('hidden');
+        }
+
+        async function fetchVipUserPrompt() {
+            const u = document.getElementById('vipTargetUsername').value.trim();
+            if (!u) return;
+            const res = await fetch(`/api/admin/user-prompt/${encodeURIComponent(u)}`, { headers: { 'x-admin-key': adminKey } });
+            const data = await res.json();
+            document.getElementById('vipPromptText').value = data.customPrompt || '';
+            showToast(data.customPrompt ? `Loaded VIP prompt` : `Using Global Prompt`);
+        }
+
+        async function saveVipCustomPrompt() {
+            const username = document.getElementById('vipTargetUsername').value.trim();
+            const customPrompt = document.getElementById('vipPromptText').value.trim();
+            const res = await fetch('/api/admin/user-prompt', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+                body: JSON.stringify({ username, customPrompt })
+            });
+            const data = await res.json();
+            showToast(data.message);
+        }
+
+        async function clearVipCustomPrompt() {
+            const username = document.getElementById('vipTargetUsername').value.trim();
+            await fetch('/api/admin/user-prompt', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+                body: JSON.stringify({ username, customPrompt: "" })
+            });
+            document.getElementById('vipPromptText').value = '';
+            showToast(`Reverted to global`);
+        }
+
+        async function loadUsersList() {
+            const s = document.getElementById('userSearchInput')?.value || '';
+            const res = await fetch(`/api/admin/users?search=${encodeURIComponent(s)}`, { headers: { 'x-admin-key': adminKey } });
+            const data = await res.json();
+            if (!data.success) return;
+            document.getElementById('usersListContainer').innerHTML = data.users.map(u => `
+                <div class="app-glass-card rounded-2xl p-3 border border-slate-800 space-y-2">
+                    <div class="flex justify-between text-xs">
+                        <strong class="text-white">${u.username} ${u.isPro ? '⭐' : ''}</strong>
+                        <span class="text-emerald-400 font-bold">${u.credits} Coins</span>
+                    </div>
+                    <div class="text-[10px] text-slate-400">${u.deviceId || 'Unbound'}</div>
+                    <div class="flex gap-1 overflow-x-auto text-[10px]">
+                        ${u.deviceId ? `<button onclick="resetHw('${u.username}')" class="px-2 py-1 bg-amber-500/20 text-amber-300 rounded">🔓 Reset HW</button>` : ''}
+                        <button onclick="addCoin('${u.username}')" class="px-2 py-1 bg-emerald-500/20 text-emerald-300 rounded">+10 Coins</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function resetHw(username) {
+            await fetch('/api/admin/reset-device', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+                body: JSON.stringify({ username })
+            });
+            loadUsersList();
+            showToast('Device lock cleared');
+        }
+
+        async function addCoin(username) {
+            await fetch('/api/admin/add-credits', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+                body: JSON.stringify({ username, amount: 10 })
+            });
+            loadUsersList();
+            showToast('+10 coins added');
+        }
+
+        async function loadMaintenance() {
+            const res = await fetch('/api/admin/maintenance');
+            const data = await res.json();
+            isAppFrozen = !!data.maintenance?.enabled;
+            const badge = document.getElementById('maintStatusBadge');
+            const btn = document.getElementById('freezeToggleBtn');
+            if (isAppFrozen) {
+                badge.innerText = '🔴 APP FROZEN';
+                badge.className = 'text-xs font-bold text-rose-400';
+                btn.innerText = '🔥 UNFREEZE APP';
+                btn.className = 'w-full py-3 bg-emerald-600 text-white font-bold text-xs rounded-xl';
+            } else {
+                badge.innerText = '🟢 NORMAL ACTIVE';
+                badge.className = 'text-xs font-bold text-emerald-400';
+                btn.innerText = '❄️ FREEZE ENTIRE APP';
+                btn.className = 'w-full py-3 bg-rose-600 text-white font-bold text-xs rounded-xl';
+            }
+        }
+
+        async function toggleEmergencyFreeze() {
+            const next = !isAppFrozen;
+            const msg = document.getElementById('freezeNoticeInput').value;
+            await fetch('/api/admin/maintenance', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+                body: JSON.stringify({ enabled: next, message: msg })
+            });
+            loadMaintenance();
+            showToast(next ? 'App Frozen' : 'App Restored');
+        }
+
+        function initializeApp() {
+            loadPrompt();
+            loadModel();
+            loadUsersList();
+            loadMaintenance();
+        }
+
+        if (adminKey) {
+            document.getElementById('loginAdminKey').value = adminKey;
+            verifyAndUnlockApp();
+        }
     </script>
 </body>
-  </html>
+</html>
