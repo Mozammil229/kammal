@@ -1,729 +1,119 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Kammal App - Command Core</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-    <style>
-        * {
-            -webkit-tap-highlight-color: transparent;
-            user-select: none;
-        }
-        input, textarea {
-            user-select: text;
-        }
-        body {
-            font-family: 'Space Grotesk', sans-serif;
-            background-color: #030712;
-            color: #F8FAFC;
-        }
-        .code-font {
-            font-family: 'JetBrains Mono', monospace;
-        }
-        .app-glass {
-            background: rgba(15, 23, 42, 0.75);
-            backdrop-filter: blur(24px);
-            -webkit-backdrop-filter: blur(24px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-        }
-        .app-glass-card {
-            background: rgba(17, 24, 39, 0.7);
-            backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.07);
-        }
-        .glass-input {
-            background: rgba(3, 7, 18, 0.85);
-            border: 1px solid rgba(255, 255, 255, 0.12);
-        }
-        .glass-input:focus {
-            border-color: #00E5FF;
-            outline: none;
-            box-shadow: 0 0 16px rgba(0, 229, 255, 0.25);
-        }
-        ::-webkit-scrollbar {
-            width: 4px;
-            height: 4px;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.15);
-            border-radius: 4px;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Kammal App — Command Core</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+body{font-family:Inter,system-ui,sans-serif;background:#030712;color:#f8fafc}
+.glass{background:rgba(15,23,42,.78);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.08)}
+input,textarea{user-select:text} .scroll::-webkit-scrollbar{width:4px}.scroll::-webkit-scrollbar-thumb{background:#334155;border-radius:8px}
+</style>
 </head>
-<body class="min-h-screen flex flex-col justify-between select-none bg-[#030712] overflow-x-hidden">
+<body class="min-h-screen">
+<div id="lock" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950 p-4">
+ <div class="glass rounded-3xl p-6 w-full max-w-sm space-y-4 text-center">
+  <div class="text-4xl">🛡️</div><h1 class="text-xl font-black">Kammal Command Core</h1>
+  <input id="key" type="password" placeholder="Admin security key" class="w-full bg-slate-950 border border-slate-700 rounded-2xl p-3">
+  <button onclick="unlock()" class="w-full py-3 rounded-2xl bg-cyan-500 text-slate-950 font-black">Unlock</button>
+  <p id="err" class="text-xs text-rose-400"></p>
+ </div>
+</div>
 
-    <!-- ============================================================= -->
-    <!-- 1. SECURE PASSWORD LOCK SCREEN -->
-    <!-- ============================================================= -->
-    <div id="lockScreen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#030712]/95 backdrop-blur-2xl">
-        <div class="w-full max-w-sm app-glass rounded-3xl p-6 border border-cyan-500/30 shadow-2xl space-y-6 text-center">
-            <div class="relative mx-auto w-20 h-20 rounded-2xl bg-gradient-to-tr from-cyan-500/20 via-slate-800 to-purple-500/20 border border-cyan-500/40 flex items-center justify-center shadow-lg shadow-cyan-500/10">
-                <span class="text-3xl">🛡️</span>
-                <span class="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-cyan-400 animate-ping"></span>
-            </div>
+<main id="app" class="hidden max-w-3xl mx-auto p-4 pb-16">
+<header class="glass sticky top-2 z-30 rounded-2xl p-4 mb-4 flex justify-between items-center">
+ <div><b>Kammal App</b><div class="text-[10px] text-emerald-400">ADMIN • ONLINE</div></div>
+ <button onclick="location.reload()" class="text-xs px-3 py-2 rounded-xl bg-slate-800">Refresh</button>
+</header>
 
-            <div>
-                <h1 class="text-xl font-bold text-white flex items-center justify-center gap-2">
-                    Kammal App
-                    <span class="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-mono">CORE v3.5</span>
-                </h1>
-                <p class="text-xs text-slate-400 mt-1">Authorized Administrator Access Only</p>
-            </div>
+<nav class="grid grid-cols-4 gap-1 bg-slate-900 p-1 rounded-2xl mb-4">
+ <button onclick="tab('ai')" class="tab py-2 rounded-xl text-xs">🧠 AI</button>
+ <button onclick="tab('users')" class="tab py-2 rounded-xl text-xs">👥 Users</button>
+ <button onclick="tab('chat')" class="tab py-2 rounded-xl text-xs">💬 Chats</button>
+ <button onclick="tab('system')" class="tab py-2 rounded-xl text-xs">⚙️ System</button>
+</nav>
 
-            <div class="space-y-3 text-left">
-                <label class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Admin Security Password / Key:</label>
-                <div class="relative">
-                    <input id="loginAdminKey" type="password" placeholder="Enter admin password..." class="w-full glass-input text-sm rounded-2xl px-4 py-3.5 text-white pr-10 code-font focus:ring-1 focus:ring-cyan-400 transition" onkeydown="if(event.key==='Enter') verifyAndUnlockApp()">
-                    <button type="button" onclick="togglePassVisibility()" class="absolute right-3.5 top-3.5 text-slate-400 hover:text-white transition text-sm">
-                        👁️
-                    </button>
-                </div>
-                <p id="lockErrorMsg" class="text-xs text-rose-400 font-medium hidden">⚠️ Invalid Admin Security Password!</p>
-            </div>
+<section id="ai" class="space-y-4">
+ <div class="glass rounded-2xl p-4 space-y-3">
+  <h2 class="font-bold">Global AI Prompt</h2>
+  <textarea id="globalPrompt" rows="7" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm"></textarea>
+  <button onclick="saveGlobal()" class="w-full py-3 rounded-xl bg-cyan-500 text-slate-950 font-bold">Save Global Prompt</button>
+ </div>
+ <div class="glass rounded-2xl p-4 space-y-3">
+  <h2 class="font-bold">Custom User Prompt</h2>
+  <div class="flex gap-2"><input id="promptUser" placeholder="username" class="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3"><button onclick="loadPrompt()" class="px-4 rounded-xl bg-purple-600">Load</button></div>
+  <textarea id="customPrompt" rows="7" placeholder="This prompt applies only to this user..." class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm"></textarea>
+  <div class="grid grid-cols-2 gap-2"><button onclick="savePrompt()" class="py-3 rounded-xl bg-purple-600 font-bold">Save / Re-edit</button><button onclick="clearPrompt()" class="py-3 rounded-xl bg-slate-800">Use Global</button></div>
+ </div>
+</section>
 
-            <button onclick="verifyAndUnlockApp()" class="w-full py-3.5 px-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold rounded-2xl text-sm shadow-lg shadow-cyan-500/25 active:scale-98 transition flex items-center justify-center gap-2">
-                <span>Unlock Control Center</span>
-                <span>⚡</span>
-            </button>
+<section id="users" class="hidden space-y-4">
+ <input id="search" oninput="loadUsers()" placeholder="Search username..." class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3">
+ <div id="usersList" class="space-y-2"></div>
+</section>
 
-            <div class="text-[11px] text-slate-500 flex items-center justify-center gap-2">
-                <span>Default Password:</span>
-                <span class="code-font bg-slate-900 border border-slate-700 px-2 py-0.5 rounded text-cyan-400 font-bold">ADmin</span>
-            </div>
-        </div>
-    </div>
+<section id="chat" class="hidden space-y-3">
+ <div class="glass rounded-2xl p-4">
+  <h2 class="font-bold mb-3">👑 Owner / Admin Inbox</h2>
+  <input id="chatSearch" oninput="loadChatUsers()" placeholder="Search user to message..." class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 mb-3">
+  <div id="chatUsers" class="space-y-2"></div>
+ </div>
+ <div id="chatBox" class="hidden glass rounded-2xl p-4">
+  <div class="flex justify-between"><b id="chatTitle">Owner Chat</b><button onclick="closeChat()">✕</button></div>
+  <div id="messages" class="scroll h-72 overflow-y-auto space-y-2 py-3"></div>
+  <div class="flex gap-2"><input id="msg" maxlength="4000" class="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3" placeholder="Type a message..."><button onclick="sendOwnerMessage()" class="px-4 rounded-xl bg-cyan-500 text-slate-950 font-bold">Send</button></div>
+ </div>
+</section>
 
-    <!-- ============================================================= -->
-    <!-- 2. MAIN ADMIN DASHBOARD -->
-    <!-- ============================================================= -->
-    <div id="mainDashboard" class="flex-1 flex flex-col max-w-2xl mx-auto w-full pb-20">
-        
-        <!-- Header Bar -->
-        <header class="sticky top-0 z-40 app-glass border-b border-slate-800/80 px-4 py-3 flex items-center justify-between">
-            <div class="flex items-center gap-3">
-                <div class="w-9 h-9 rounded-xl bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-300 font-bold text-base">
-                    ⚡
-                </div>
-                <div>
-                    <h2 class="text-sm font-bold text-white leading-tight">Kammal App Control Hub</h2>
-                    <p class="text-[10px] text-emerald-400 font-mono flex items-center gap-1">
-                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block animate-pulse"></span>
-                        MongoDB Atlas & Gemini 3.1 Pro Online
-                    </p>
-                </div>
-            </div>
+<section id="system" class="hidden space-y-4">
+ <div class="glass rounded-2xl p-4 space-y-3">
+  <h2 class="font-bold">Plans & Credits</h2>
+  <p class="text-xs text-slate-400">Owner is protected at 9,999,999 credits and Lifetime.</p>
+  <div class="text-sm bg-slate-950 rounded-xl p-3">Supported: Free • Monthly • Yearly • Lifetime • Custom</div>
+ </div>
+ <div class="glass rounded-2xl p-4 space-y-3">
+  <h2 class="font-bold">Maintenance</h2>
+  <textarea id="maint" rows="3" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3"></textarea>
+  <div class="grid grid-cols-2 gap-2"><button onclick="maintenance(true)" class="py-3 rounded-xl bg-rose-600">Freeze</button><button onclick="maintenance(false)" class="py-3 rounded-xl bg-emerald-600">Resume</button></div>
+ </div>
+</section>
+</main>
 
-            <div class="flex items-center gap-2">
-                <button onclick="fetchAllData()" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 active:scale-95 transition" title="Refresh">
-                    🔄
-                </button>
-                <button onclick="lockAdminScreen()" class="px-2.5 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 text-[11px] font-bold flex items-center gap-1 active:scale-90 transition">
-                    <span>Lock</span>
-                    <span>🔒</span>
-                </button>
-            </div>
-        </header>
-
-        <div class="p-4 space-y-4 flex-1">
-
-            <!-- TAB NAVIGATION -->
-            <div class="flex p-1 bg-slate-900/90 rounded-2xl border border-slate-800 text-xs">
-                <button onclick="switchTab('tab-prompts')" id="btn-tab-prompts" class="flex-1 py-2.5 font-bold rounded-xl bg-cyan-500 text-slate-950 transition">
-                    🧠 AI & Prompts
-                </button>
-                <button onclick="switchTab('tab-users')" id="btn-tab-users" class="flex-1 py-2.5 font-bold rounded-xl text-slate-400 hover:text-white transition">
-                    👥 Users & HW Lock
-                </button>
-                <button onclick="switchTab('tab-system')" id="btn-tab-system" class="flex-1 py-2.5 font-bold rounded-xl text-slate-400 hover:text-white transition">
-                    ⚙️ App Freeze
-                </button>
-            </div>
-
-            <!-- ========================================== -->
-            <!-- TAB 1: AI PROMPT ENGINE & GEMINI 3.1 -->
-            <!-- ========================================== -->
-            <div id="tab-prompts" class="space-y-4">
-                <!-- AI Engine Selector Card -->
-                <div class="app-glass-card rounded-2xl p-4 border border-cyan-500/20 space-y-3">
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs font-bold text-cyan-400 flex items-center gap-1.5">
-                            <span>🧠</span> Active Gemini Engine:
-                        </span>
-                        <span id="activeModelBadge" class="code-font text-[10px] bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded-md border border-cyan-500/40">gemini-3.1-pro-preview</span>
-                    </div>
-                    <div class="grid grid-cols-2 gap-2">
-                        <button onclick="selectAiModel('gemini-3.1-pro-preview')" class="model-btn text-xs py-2 px-3 rounded-xl bg-slate-900 border border-cyan-500/60 text-cyan-300 active:scale-95 transition text-left">
-                            <strong class="block text-white text-[11px]">gemini-3.1-pro</strong>
-                            <span class="text-[9px] text-cyan-400">Gemini 3.1 Pro (Default)</span>
-                        </button>
-                        <button onclick="selectAiModel('gemini-3.5-flash')" class="model-btn text-xs py-2 px-3 rounded-xl bg-slate-900 border border-slate-700 text-slate-300 hover:border-cyan-500 active:scale-95 transition text-left">
-                            <strong class="block text-white text-[11px]">gemini-3.5-flash</strong>
-                            <span class="text-[9px] text-slate-400">Gemini 3.5 Flash</span>
-                        </button>
-                        <button onclick="selectAiModel('gemini-3.1-flash-lite-preview')" class="model-btn text-xs py-2 px-3 rounded-xl bg-slate-900 border border-slate-700 text-slate-300 hover:border-cyan-500 active:scale-95 transition text-left">
-                            <strong class="block text-white text-[11px]">gemini-3.1-flash-lite</strong>
-                            <span class="text-[9px] text-slate-400">Ultra Fast Lite</span>
-                        </button>
-                        <button onclick="selectAiModel('gemini-2.5-flash')" class="model-btn text-xs py-2 px-3 rounded-xl bg-slate-900 border border-slate-700 text-slate-300 hover:border-cyan-500 active:scale-95 transition text-left">
-                            <strong class="block text-white text-[11px]">gemini-2.5-flash</strong>
-                            <span class="text-[9px] text-slate-400">Fast Stable</span>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Global System Prompt Presets Chips -->
-                <div class="space-y-2">
-                    <div class="flex items-center justify-between text-xs text-slate-400 font-semibold">
-                        <span>Presets:</span>
-                    </div>
-                    <div class="flex flex-wrap gap-1.5" id="presetsChipContainer">
-                        <button onclick="applyPreset('video_optimizer')" class="text-[11px] px-2.5 py-1 bg-slate-900 border border-cyan-500/30 text-cyan-300 rounded-lg hover:border-cyan-400">🎬 Video Optimizer</button>
-                        <button onclick="applyPreset('sales_support')" class="text-[11px] px-2.5 py-1 bg-slate-900 border border-amber-500/30 text-amber-300 rounded-lg hover:border-amber-400">💎 VIP Sales</button>
-                        <button onclick="applyPreset('tech_troubleshooter')" class="text-[11px] px-2.5 py-1 bg-slate-900 border border-purple-500/30 text-purple-300 rounded-lg hover:border-purple-400">🛠️ HW Specialist</button>
-                        <button onclick="applyPreset('urdu_english')" class="text-[11px] px-2.5 py-1 bg-slate-900 border border-emerald-500/30 text-emerald-300 rounded-lg hover:border-emerald-400">🇵🇰 Roman Urdu</button>
-                    </div>
-                </div>
-
-                <!-- Global System Prompt Textarea -->
-                <div class="app-glass-card rounded-2xl p-4 border border-slate-800 space-y-2">
-                    <div class="flex justify-between items-center text-xs">
-                        <span class="font-bold text-white flex items-center gap-1.5">
-                            <span>📜</span> Global System Instruction:
-                        </span>
-                        <span id="promptLengthCount" class="code-font text-slate-400 text-[10px]">0 chars</span>
-                    </div>
-                    <textarea id="globalPromptInput" rows="5" oninput="updateCharCount()" class="w-full glass-input text-xs leading-relaxed rounded-xl p-3 text-slate-200 code-font focus:ring-1 focus:ring-cyan-400" placeholder="System prompt loading..."></textarea>
-                    
-                    <div class="flex gap-2 pt-1">
-                        <button onclick="saveGlobalPrompt()" class="flex-1 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs rounded-xl shadow-md shadow-cyan-500/20 active:scale-95 transition flex items-center justify-center gap-1.5">
-                            <span>🚀 Deploy to MongoDB</span>
-                        </button>
-                        <button onclick="resetGlobalPrompt()" class="px-3 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-xl active:scale-95 transition">
-                            Reset
-                        </button>
-                    </div>
-                </div>
-
-                <!-- VIP Khas Prompt (Per-User Prompt Override) -->
-                <div class="app-glass-card rounded-2xl p-4 border border-purple-500/30 space-y-3">
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs font-bold text-purple-400 flex items-center gap-1.5">
-                            <span>⭐</span> VIP User Khas Prompt:
-                        </span>
-                    </div>
-                    <div class="flex gap-2">
-                        <input id="vipTargetUsername" type="text" placeholder="Username (e.g. mozammil)" class="flex-1 glass-input text-xs rounded-xl px-3 py-2 text-white">
-                        <button onclick="loadUserCustomPrompt()" class="px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl">Fetch</button>
-                    </div>
-                    <textarea id="vipCustomPromptInput" rows="3" class="w-full glass-input text-xs rounded-xl p-3 text-purple-200 code-font" placeholder="Custom prompt exclusively for this user..."></textarea>
-                    <div class="flex gap-2">
-                        <button onclick="saveUserCustomPrompt()" class="flex-1 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-xs rounded-xl shadow-md shadow-purple-500/20">Save VIP Prompt</button>
-                        <button onclick="clearUserCustomPrompt()" class="px-3 py-2 bg-slate-800 text-slate-400 text-xs rounded-xl">Clear</button>
-                    </div>
-                </div>
-
-                <!-- Live Test Prompt Box -->
-                <div class="app-glass-card rounded-2xl p-4 border border-slate-800 space-y-2">
-                    <span class="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                        <span>🧪</span> Live Playground Test
-                    </span>
-                    <div class="flex gap-2">
-                        <input id="testQueryInput" type="text" value="Export settings for TikTok 1080p 60fps" class="flex-1 glass-input text-xs rounded-xl px-3 py-2 text-white">
-                        <button onclick="runTestPrompt()" id="btnRunTest" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 font-bold text-xs rounded-xl border border-cyan-500/30">Test</button>
-                    </div>
-                    <div id="testReplyBox" class="p-3 bg-slate-950/80 rounded-xl border border-slate-800 text-[11px] text-slate-300 code-font hidden max-h-40 overflow-y-auto"></div>
-                </div>
-            </div>
-
-            <!-- ========================================== -->
-            <!-- TAB 2: USERS & 1-DEVICE HARDWARE LOCK -->
-            <!-- ========================================== -->
-            <div id="tab-users" class="space-y-4 hidden">
-                <div class="flex gap-2">
-                    <input id="userSearchInput" type="text" placeholder="Search username or Device ID..." oninput="filterUsers()" class="flex-1 glass-input text-xs rounded-xl px-3 py-2.5 text-white">
-                    <button onclick="fetchAllData()" class="px-3 py-2.5 bg-slate-800 text-white text-xs rounded-xl">Search</button>
-                </div>
-
-                <div class="text-[11px] text-slate-400 flex items-center justify-between px-1">
-                    <span>Registered Users (<span id="userCountBadge">0</span>)</span>
-                    <span class="text-cyan-400">1-Device Lock Enforced</span>
-                </div>
-
-                <!-- User Cards List -->
-                <div id="userListContainer" class="space-y-2">
-                    <div class="text-center py-8 text-xs text-slate-500">Loading user database...</div>
-                </div>
-            </div>
-
-            <!-- ========================================== -->
-            <!-- TAB 3: APP FREEZE & SYSTEM -->
-            <!-- ========================================== -->
-            <div id="tab-system" class="space-y-4 hidden">
-                <div class="app-glass-card rounded-2xl p-4 border border-rose-500/30 space-y-3">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <h3 class="text-xs font-bold text-white flex items-center gap-1.5">
-                                <span>🚨</span> Global Emergency Maintenance Freeze
-                            </h3>
-                            <p class="text-[10px] text-slate-400 mt-0.5">Freeze all user requests in the Android App instantly.</p>
-                        </div>
-                        <span id="maintStatusPill" class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">Active</span>
-                    </div>
-
-                    <textarea id="maintMessageInput" rows="2" class="w-full glass-input text-xs rounded-xl p-3 text-white" placeholder="Scheduled maintenance message to display to users..."></textarea>
-
-                    <div class="flex gap-2">
-                        <button onclick="setMaintenance(true)" class="flex-1 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl shadow-md shadow-rose-600/25">
-                            🔒 Freeze App Globally
-                        </button>
-                        <button onclick="setMaintenance(false)" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md shadow-emerald-600/25">
-                            ✅ Unfreeze (Resume Normal)
-                        </button>
-                    </div>
-                </div>
-
-                <div class="app-glass-card rounded-2xl p-4 border border-slate-800 text-xs space-y-2 text-slate-400">
-                    <strong class="text-white block">Server & Database Stats:</strong>
-                    <div class="flex justify-between py-1 border-b border-slate-800">
-                        <span>Database:</span>
-                        <span class="text-emerald-400 font-mono">MongoDB Atlas (MyUsersDB)</span>
-                    </div>
-                    <div class="flex justify-between py-1 border-b border-slate-800">
-                        <span>Default Password:</span>
-                        <span class="text-cyan-300 font-mono">ADmin</span>
-                    </div>
-                    <div class="flex justify-between py-1">
-                        <span>Gemini Engine:</span>
-                        <span class="text-cyan-300 font-mono">gemini-3.1-pro-preview</span>
-                    </div>
-                </div>
-            </div>
-
-        </div>
-    </div>
-
-    <!-- Toast Notification Popup -->
-    <div id="toast" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 bg-slate-900/95 text-white border border-cyan-500/50 px-4 py-2.5 rounded-2xl text-xs shadow-2xl code-font opacity-0 pointer-events-none transition-all duration-300 max-w-xs text-center"></div>
-
-    <!-- ============================================================= -->
-    <!-- 3. CLIENT LOGIC & APIS INTEGRATION -->
-    <!-- ============================================================= -->
-    <script>
-        let adminKey = localStorage.getItem('kamaal_admin_pwd') || '';
-        let systemPresets = {};
-        let cachedUsers = [];
-
-        function showToast(msg, isError = false) {
-            const t = document.getElementById('toast');
-            t.innerText = msg;
-            t.className = `fixed bottom-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-2xl text-xs shadow-2xl code-font transition-all duration-300 max-w-xs text-center ${isError ? 'bg-rose-950 text-rose-300 border border-rose-500' : 'bg-slate-900/95 text-cyan-300 border border-cyan-500/50'}`;
-            t.style.opacity = '1';
-            t.style.transform = 'translate(-50%, 0)';
-            setTimeout(() => {
-                t.style.opacity = '0';
-                t.style.transform = 'translate(-50%, 10px)';
-            }, 3000);
-        }
-
-        function togglePassVisibility() {
-            const input = document.getElementById('loginAdminKey');
-            input.type = input.type === 'password' ? 'text' : 'password';
-        }
-
-        async function verifyAndUnlockApp() {
-            const err = document.getElementById('lockErrorMsg');
-            const pwd = document.getElementById('loginAdminKey').value.trim();
-            err.classList.add('hidden');
-
-            if (!pwd) {
-                err.innerText = "Please enter admin password";
-                err.classList.remove('hidden');
-                return;
-            }
-
-            try {
-                const res = await fetch('/api/admin/system-prompt', {
-                    headers: { 'x-admin-key': pwd }
-                });
-                const data = await res.json();
-
-                if (data.success || pwd === 'ADmin') {
-                    adminKey = pwd;
-                    localStorage.setItem('kamaal_admin_pwd', pwd);
-                    document.getElementById('lockScreen').classList.add('hidden');
-                    fetchAllData();
-                    showToast("Access Authorized ✅");
-                } else {
-                    err.innerText = "⚠️ Invalid Admin Security Password!";
-                    err.classList.remove('hidden');
-                }
-            } catch (e) {
-                if (pwd === 'ADmin' || pwd.length >= 4) {
-                    adminKey = pwd;
-                    localStorage.setItem('kamaal_admin_pwd', pwd);
-                    document.getElementById('lockScreen').classList.add('hidden');
-                    fetchAllData();
-                } else {
-                    err.innerText = "⚠️ Could not authenticate";
-                    err.classList.remove('hidden');
-                }
-            }
-        }
-
-        function lockAdminScreen() {
-            localStorage.removeItem('kamaal_admin_pwd');
-            adminKey = '';
-            document.getElementById('loginAdminKey').value = '';
-            document.getElementById('lockScreen').classList.remove('hidden');
-            showToast("Admin Screen Locked 🔒");
-        }
-
-        function switchTab(tabId) {
-            ['tab-prompts', 'tab-users', 'tab-system'].forEach(id => {
-                document.getElementById(id).classList.add('hidden');
-            });
-            document.getElementById(tabId).classList.remove('hidden');
-
-            ['btn-tab-prompts', 'btn-tab-users', 'btn-tab-system'].forEach(b => {
-                const el = document.getElementById(b);
-                el.className = 'flex-1 py-2.5 font-bold rounded-xl text-slate-400 hover:text-white transition';
-            });
-            const activeBtn = document.getElementById(`btn-${tabId}`);
-            activeBtn.className = 'flex-1 py-2.5 font-bold rounded-xl bg-cyan-500 text-slate-950 transition';
-        }
-
-        function updateCharCount() {
-            const count = document.getElementById('globalPromptInput').value.length;
-            document.getElementById('promptLengthCount').innerText = `${count} chars`;
-        }
-
-        async function fetchAllData() {
-            if (!adminKey) return;
-            fetchSystemPrompt();
-            fetchModel();
-            fetchUsers();
-            fetchMaintenance();
-        }
-
-        async function fetchSystemPrompt() {
-            try {
-                const res = await fetch('/api/admin/system-prompt', { headers: { 'x-admin-key': adminKey } });
-                const data = await res.json();
-                if (data.success) {
-                    document.getElementById('globalPromptInput').value = data.systemPrompt || '';
-                    updateCharCount();
-                    if (data.presets) {
-                        data.presets.forEach(p => systemPresets[p.id] = p.prompt);
-                    }
-                }
-            } catch (_) {}
-        }
-
-        function applyPreset(presetId) {
-            const presets = {
-                video_optimizer: "You are Kammal App AI, elite video optimization engine. Guide users to achieve crisp 1080p 60fps zero-compression videos for TikTok and Instagram reels.",
-                sales_support: "You are Kammal App VIP Sales Consultant. Help creators purchase credit packages and explain VIP PRO benefits.",
-                tech_troubleshooter: "You are Technical Specialist for Hardware Lock and Device Security. Guide users on resetting device binding.",
-                urdu_english: "Aap Kammal App ke bilingual assistant hain. Roman Urdu aur English dono me crisp 1080p 60fps export parameters batayein."
-            };
-            if (presets[presetId]) {
-                document.getElementById('globalPromptInput').value = presets[presetId];
-                updateCharCount();
-                showToast("Preset loaded into editor!");
-            }
-        }
-
-        async function saveGlobalPrompt() {
-            const val = document.getElementById('globalPromptInput').value.trim();
-            if (!val) return showToast("Prompt cannot be empty", true);
-
-            try {
-                const res = await fetch('/api/admin/system-prompt', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
-                    body: JSON.stringify({ systemPrompt: val })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    showToast("Prompt Deployed to MongoDB ✅");
-                }
-            } catch (e) {
-                showToast(e.message, true);
-            }
-        }
-
-        async function resetGlobalPrompt() {
-            applyPreset('video_optimizer');
-            await saveGlobalPrompt();
-        }
-
-        async function runTestPrompt() {
-            const query = document.getElementById('testQueryInput').value.trim();
-            const prompt = document.getElementById('globalPromptInput').value.trim();
-            const btn = document.getElementById('btnRunTest');
-            const box = document.getElementById('testReplyBox');
-
-            btn.disabled = true;
-            btn.innerText = '...';
-            box.classList.remove('hidden');
-            box.innerText = "Running generation on Gemini 3.1 Pro...";
-
-            try {
-                const res = await fetch('/api/admin/test-prompt', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
-                    body: JSON.stringify({ prompt, testMessage: query })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    box.innerText = `[${data.model}]\n${data.reply}`;
-                } else {
-                    box.innerText = "Error: " + data.error;
-                }
-            } catch (e) {
-                box.innerText = "Request failed: " + e.message;
-            } finally {
-                btn.disabled = false;
-                btn.innerText = 'Test';
-            }
-        }
-
-        async function fetchModel() {
-            try {
-                const res = await fetch('/api/admin/model', { headers: { 'x-admin-key': adminKey } });
-                const data = await res.json();
-                if (data.success) {
-                    document.getElementById('activeModelBadge').innerText = data.currentModel || 'gemini-3.1-pro-preview';
-                }
-            } catch (_) {}
-        }
-
-        async function selectAiModel(modelName) {
-            try {
-                const res = await fetch('/api/admin/model', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
-                    body: JSON.stringify({ model: modelName })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    document.getElementById('activeModelBadge').innerText = modelName;
-                    showToast(`Active engine set to: ${modelName}`);
-                }
-            } catch (e) {
-                showToast(e.message, true);
-            }
-        }
-
-        async function loadUserCustomPrompt() {
-            const username = document.getElementById('vipTargetUsername').value.trim();
-            if (!username) return showToast("Enter username first", true);
-            try {
-                const res = await fetch(`/api/admin/user-prompt/${encodeURIComponent(username)}`, {
-                    headers: { 'x-admin-key': adminKey }
-                });
-                const data = await res.json();
-                if (data.success) {
-                    document.getElementById('vipCustomPromptInput').value = data.customPrompt || '';
-                    showToast(data.customPrompt ? `VIP prompt loaded for ${username}` : `No custom prompt for ${username} (using global)`);
-                } else {
-                    showToast(data.error, true);
-                }
-            } catch (e) {
-                showToast(e.message, true);
-            }
-        }
-
-        async function saveUserCustomPrompt() {
-            const username = document.getElementById('vipTargetUsername').value.trim();
-            const customPrompt = document.getElementById('vipCustomPromptInput').value.trim();
-            if (!username) return showToast("Enter username first", true);
-
-            try {
-                const res = await fetch('/api/admin/user-prompt', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
-                    body: JSON.stringify({ username, customPrompt })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    showToast(data.message);
-                }
-            } catch (e) {
-                showToast(e.message, true);
-            }
-        }
-
-        async function clearUserCustomPrompt() {
-            document.getElementById('vipCustomPromptInput').value = '';
-            await saveUserCustomPrompt();
-        }
-
-        async function fetchUsers() {
-            const search = document.getElementById('userSearchInput')?.value.trim() || '';
-            try {
-                const res = await fetch(`/api/admin/users?search=${encodeURIComponent(search)}`, {
-                    headers: { 'x-admin-key': adminKey }
-                });
-                const data = await res.json();
-                if (data.success) {
-                    cachedUsers = data.users || [];
-                    document.getElementById('userCountBadge').innerText = cachedUsers.length;
-                    renderUserList(cachedUsers);
-                }
-            } catch (_) {}
-        }
-
-        function filterUsers() {
-            const q = document.getElementById('userSearchInput').value.toLowerCase();
-            const filtered = cachedUsers.filter(u => u.username.toLowerCase().includes(q) || (u.deviceId && u.deviceId.toLowerCase().includes(q)));
-            renderUserList(filtered);
-        }
-
-        function renderUserList(users) {
-            const c = document.getElementById('userListContainer');
-            if (!users || users.length === 0) {
-                c.innerHTML = '<div class="text-center py-6 text-xs text-slate-500">No users found.</div>';
-                return;
-            }
-
-            c.innerHTML = users.map(u => {
-                const isLocked = !!u.deviceId;
-                const isBanned = u.status === 'banned';
-                const hasVipPrompt = !!u.customPrompt;
-
-                return `
-                <div class="app-glass-card rounded-xl p-3 border ${isBanned ? 'border-rose-500/40 bg-rose-950/20' : 'border-slate-800'} space-y-2.5">
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-2">
-                            <span class="font-bold text-sm text-white">${u.username}</span>
-                            ${u.isPro ? '<span class="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.2 rounded font-bold">PRO</span>' : ''}
-                            ${hasVipPrompt ? '<span class="text-[9px] bg-purple-500/20 text-purple-300 border border-purple-500/40 px-1.5 py-0.2 rounded font-bold">VIP Prompt ⭐</span>' : ''}
-                        </div>
-                        <span class="code-font text-xs text-cyan-300 font-bold">🪙 ${u.credits || 0}</span>
-                    </div>
-
-                    <div class="flex items-center justify-between text-[11px] bg-slate-950/60 p-2 rounded-lg border border-slate-800/80">
-                        <span class="text-slate-400">HW Lock:</span>
-                        <span class="code-font ${isLocked ? 'text-emerald-400' : 'text-slate-500'}">
-                            ${isLocked ? '🔒 Bound: ' + u.deviceId : '🔓 Unbound (Any Device)'}
-                        </span>
-                    </div>
-
-                    <div class="flex flex-wrap gap-1.5 pt-1">
-                        ${isLocked ? `<button onclick="resetDevice('${u.username}')" class="text-[10px] px-2.5 py-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30">Reset HW</button>` : ''}
-                        <button onclick="addCredits('${u.username}', 20)" class="text-[10px] px-2.5 py-1 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 hover:bg-cyan-500/30">+20 Coins</button>
-                        <button onclick="togglePro('${u.username}', ${!u.isPro})" class="text-[10px] px-2.5 py-1 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 hover:bg-purple-500/30">${u.isPro ? 'Demote Pro' : 'Make PRO'}</button>
-                        <button onclick="toggleBan('${u.username}', ${!isBanned})" class="text-[10px] px-2.5 py-1 rounded ${isBanned ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'}">${isBanned ? 'Unban' : 'Ban'}</button>
-                    </div>
-                </div>
-                `;
-            }).join('');
-        }
-
-        async function resetDevice(username) {
-            try {
-                const res = await fetch('/api/admin/reset-device', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
-                    body: JSON.stringify({ username })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    showToast(`Device reset for ${username}`);
-                    fetchUsers();
-                }
-            } catch (e) { showToast(e.message, true); }
-        }
-
-        async function addCredits(username, amount) {
-            try {
-                const res = await fetch('/api/admin/add-credits', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
-                    body: JSON.stringify({ username, amount })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    showToast(`+${amount} coins given to ${username}`);
-                    fetchUsers();
-                }
-            } catch (e) { showToast(e.message, true); }
-        }
-
-        async function togglePro(username, isPro) {
-            try {
-                const res = await fetch('/api/admin/set-pro', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
-                    body: JSON.stringify({ username, isPro })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    showToast(`${username} PRO status updated!`);
-                    fetchUsers();
-                }
-            } catch (e) { showToast(e.message, true); }
-        }
-
-        async function toggleBan(username, shouldBan) {
-            const endpoint = shouldBan ? '/api/admin/ban' : '/api/admin/unban';
-            try {
-                const res = await fetch(endpoint, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
-                    body: JSON.stringify({ username })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    showToast(`${username} ${shouldBan ? 'Banned' : 'Unbanned'}`);
-                    fetchUsers();
-                }
-            } catch (e) { showToast(e.message, true); }
-        }
-
-        async function fetchMaintenance() {
-            try {
-                const res = await fetch('/api/admin/maintenance', { headers: { 'x-admin-key': adminKey } });
-                const data = await res.json();
-                if (data.success) {
-                    const m = data.maintenance || {};
-                    const pill = document.getElementById('maintStatusPill');
-                    if (m.enabled) {
-                        pill.className = 'text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/40';
-                        pill.innerText = 'FROZEN 🔒';
-                    } else {
-                        pill.className = 'text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40';
-                        pill.innerText = 'Active ✅';
-                    }
-                    document.getElementById('maintMessageInput').value = m.message || '';
-                }
-            } catch (_) {}
-        }
-
-        async function setMaintenance(enabled) {
-            const message = document.getElementById('maintMessageInput').value.trim();
-            try {
-                const res = await fetch('/api/admin/maintenance', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
-                    body: JSON.stringify({ enabled, message })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    showToast(enabled ? "App FROZEN globally!" : "App Unfrozen!");
-                    fetchMaintenance();
-                }
-            } catch (e) { showToast(e.message, true); }
-        }
-
-        // Auto unlock if valid key already saved
-        if (adminKey && adminKey.length >= 4) {
-            document.getElementById('loginAdminKey').value = adminKey;
-            verifyAndUnlockApp();
-        }
-    </script>
+<script>
+let key=localStorage.getItem("kammal_admin_key")||"", selectedUser=null;
+const $=id=>document.getElementById(id);
+function api(url,opt={}){opt.headers={...(opt.headers||{}),"x-admin-key":key};return fetch(url,opt).then(async r=>{const d=await r.json();if(!r.ok)throw Error(d.error||"Request failed");return d})}
+async function unlock(){try{const d=await api("/api/admin/system-prompt");key=$("key").value.trim();localStorage.setItem("kammal_admin_key",key);$("lock").classList.add("hidden");$("app").classList.remove("hidden");loadAll()}catch(e){$("err").textContent="Invalid admin key"}} 
+function tab(id){["ai","users","chat","system"].forEach(x=>$(x).classList.toggle("hidden",x!==id));if(id==="users")loadUsers();if(id==="chat")loadChatUsers();if(id==="system")loadMaintenance()}
+async function loadAll(){try{const d=await api("/api/admin/system-prompt");$("globalPrompt").value=d.systemPrompt||""}catch(e){}loadUsers()}
+async function saveGlobal(){await api("/api/admin/system-prompt",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({systemPrompt:$("globalPrompt").value})});alert("Global prompt saved")}
+async function loadPrompt(){const u=$("promptUser").value.trim();if(!u)return;const d=await api("/api/admin/user-prompt/"+encodeURIComponent(u));$("customPrompt").value=d.customPrompt||""}
+async function savePrompt(){const u=$("promptUser").value.trim();await api("/api/admin/user-prompt",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:u,customPrompt:$("customPrompt").value})});alert("Custom prompt saved")}
+async function clearPrompt(){$("customPrompt").value="";await savePrompt()}
+async function loadUsers(){try{const d=await api("/api/admin/users?search="+encodeURIComponent($("search").value||""));$("usersList").innerHTML=(d.users||[]).map(u=>`
+<div class="glass rounded-2xl p-4">
+ <div class="flex justify-between items-center"><div><b>${esc(u.username)}</b>${u.owner?' <span class="text-amber-300 font-bold">👑 Owner</span>':''} ${u.isPro?'<span class="text-amber-300 text-xs">PRO</span>':''}</div><b class="text-cyan-300">${u.credits}</b></div>
+ <div class="text-xs text-slate-400 mt-2">Plan: ${u.planType} • ${u.planStatus}</div>
+ <div class="flex flex-wrap gap-2 mt-3">
+ <button class="px-3 py-2 rounded-lg bg-cyan-500/20 text-cyan-300 text-xs" onclick="give('${encodeURIComponent(u.realUsernameHidden?'':u.username)}')">+20</button>
+ <button class="px-3 py-2 rounded-lg bg-purple-500/20 text-purple-300 text-xs" onclick="plan('${encodeURIComponent(u.realUsernameHidden?'':u.username)}','monthly')">Monthly</button>
+ <button class="px-3 py-2 rounded-lg bg-purple-500/20 text-purple-300 text-xs" onclick="plan('${encodeURIComponent(u.realUsernameHidden?'':u.username)}','yearly')">Yearly</button>
+ <button class="px-3 py-2 rounded-lg bg-amber-500/20 text-amber-300 text-xs" onclick="plan('${encodeURIComponent(u.realUsernameHidden?'':u.username)}','lifetime')">Lifetime</button>
+ <button class="px-3 py-2 rounded-lg bg-slate-800 text-xs" onclick="openUserPrompt('${encodeURIComponent(u.realUsernameHidden?'':u.username)}')">Prompt</button>
+ </div>
+</div>`).join("")||"<p class='text-slate-500'>No users.</p>"}catch(e){$("usersList").innerHTML="<p class='text-rose-400'>"+esc(e.message)+"</p>"}}
+async function give(u){if(!u)return alert("Owner is protected.");await api("/api/admin/add-credits",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:decodeURIComponent(u),amount:20})});loadUsers()}
+async function plan(u,type){if(!u)return alert("Owner is already Lifetime.");await api("/api/admin/set-plan",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:decodeURIComponent(u),planType:type})});loadUsers()}
+function openUserPrompt(u){if(!u)return;tab("ai");$("promptUser").value=decodeURIComponent(u);loadPrompt()}
+async function loadChatUsers(){try{const d=await api("/api/admin/chat/users?search="+encodeURIComponent($("chatSearch").value||""));$("chatUsers").innerHTML=(d.users||[]).map(u=>`<button onclick="openChat('${u.id}','${esc(u.username)}')" class="w-full text-left glass rounded-xl p-3"><b>${u.owner?'👑 Owner':esc(u.username)}</b><span class="text-xs text-slate-500 ml-2">${u.planType}</span></button>`).join("")}catch(e){}}
+async function openChat(id,name){selectedUser=id;$("chatBox").classList.remove("hidden");$("chatTitle").textContent="👑 Owner → "+name;$("messages").innerHTML="<div class='text-slate-500 text-sm'>Use Send to start this conversation.</div>"}
+async function sendOwnerMessage(){if(!selectedUser)return;const text=$("msg").value.trim();if(!text)return;await api("/api/admin/chat/"+selectedUser+"/message",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:text})});$("messages").insertAdjacentHTML("beforeend",`<div class="ml-auto max-w-[85%] bg-cyan-600/20 border border-cyan-500/30 rounded-2xl p-3 text-sm"><b>Owner</b><div>${esc(text)}</div></div>`);$("msg").value=""}
+function closeChat(){$("chatBox").classList.add("hidden");selectedUser=null}
+async function loadMaintenance(){try{const d=await api("/api/admin/maintenance");$("maint").value=d.maintenance?.message||""}catch(e){}}
+async function maintenance(enabled){await api("/api/admin/maintenance",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({enabled,message:$("maint").value})});alert(enabled?"Frozen":"Resumed")}
+function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+if(key){$("key").value=key;unlock()}
+</script>
 </body>
 </html>
