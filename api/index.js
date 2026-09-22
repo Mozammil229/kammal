@@ -1,997 +1,422 @@
 /**
- * ============================================================================
- * KAMAAL STUDIO - ALL-IN-ONE ENTERPRISE BACKEND SERVER (VERCEL NATIVE API)
- * ============================================================================
- * Contains all models, security authentication, device lock governance,
- * pre-patch credit authorization, Gemini AI chatbot proxy, and admin management
- * in a single unified, ultra-fast serverless-ready architecture.
- * ============================================================================
+ * Kammal App - Vercel Serverless Backend with MongoDB Atlas & Gemini 3.1 Pro
  */
-
-try {
-    require('dotenv').config();
-} catch (_) {}
 const express = require('express');
-const mongoose = require('mongoose');
 const cors = require('cors');
 const path = require('path');
-const fs = require('fs');
-const crypto = require('crypto');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-
-// Prevent Mongoose from hanging or buffering queries indefinitely when disconnected
-mongoose.set('bufferCommands', false);
+const mongoose = require('mongoose');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Security Keys & MongoDB Atlas URI
+const ADMIN_SECURITY_KEY = process.env.ADMIN_KEY || 'ADmin';
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://pukathub_db_user:AWiAL8UUwrOQ6h33@cluster0.y2lzfvn.mongodb.net/MyUsersDB?retryWrites=true&w=majority';
-const JWT_SECRET = process.env.JWT_SECRET || 'kamaal_studio_secret_token_2026_jwt_lock';
-const ADMIN_SECRET_KEY = process.env.ADMIN_KEY || 'KAMAAL_STUDIO_ADMIN_KEY_9999';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'kamaal2026';
 
-const VALID_ADMIN_KEYS = new Set([
-    ADMIN_SECRET_KEY,
-    ADMIN_PASSWORD,
-    'ADmin',
-    'admin',
-    'KAMAAL_STUDIO_ADMIN_KEY_9999',
-    'kamaal2026',
-    'admin123',
-    'owner',
-    '123456',
-    (process.env.ADMIN_KEY || '').trim(),
-    (process.env.ADMIN_PASSWORD || '').trim()
-].filter(Boolean));
+const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
 
-function authenticateAdmin(req, res, next) {
-    const providedKey = (req.headers['x-admin-key'] || req.query.admin_key || req.query.key || req.body?.admin_key || req.body?.key || '').toString().trim();
-    // In serverless / web panel, if key is provided or default accepted
-    if (!providedKey || VALID_ADMIN_KEYS.has(providedKey) || providedKey.toLowerCase() === 'admin' || providedKey.toLowerCase() === 'admin123' || providedKey.toLowerCase() === 'kamaal2026' || providedKey === ADMIN_SECRET_KEY) {
-        return next();
+app.use(cors());
+app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Helper: Resolve Gemini 3.1 and higher model names
+function resolveGeminiModel(name) {
+    if (!name) return "gemini-3.1-pro-preview";
+    const clean = name.trim().toLowerCase();
+    if (clean === "gemini-3.1" || clean === "gemini-pro" || clean.includes("3.1-pro")) {
+        return "gemini-3.1-pro-preview";
     }
-    return res.status(401).json({
-        success: false,
-        error: 'Unauthorized: Invalid admin key. (Default: kamaal2026 or ADmin)'
-    });
+    if (clean.includes("3.5") || clean === "gemini-flash" || clean.includes("3.5-flash")) {
+        return "gemini-3.5-flash";
+    }
+    if (clean.includes("lite") || clean.includes("3.1-flash-lite")) {
+        return "gemini-3.1-flash-lite-preview";
+    }
+    if (clean.includes("2.5")) {
+        return "gemini-2.5-flash";
+    }
+    return name;
 }
 
-// Core Middlewares
-app.use(cors({
-    origin: '*',
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-key']
-}));
-app.use(express.json({ limit: '15mb' }));
-app.use(express.urlencoded({ extended: true, limit: '15mb' }));
-
-// Vercel Serverless Function URL Normalizer
-app.use((req, res, next) => {
-    const matchedPath = req.headers['x-matched-path'] 
-        || req.headers['x-forwarded-uri']
-        || req.headers['x-now-route-matches']
-        || req.headers['x-original-uri'];
-
-    if (matchedPath && matchedPath !== '/api/index.js' && !matchedPath.includes('/api/index.js')) {
-        req.url = matchedPath;
-    } else if (req.url.startsWith('/api/index.js')) {
-        const cleaned = req.url.replace('/api/index.js', '');
-        req.url = cleaned.length > 0 ? cleaned : '/api/health';
-    }
-    next();
+// 🗄️ MongoDB Schemas
+const UserSchema = new mongoose.Schema({
+    username: { type: String, required: true, unique: true, index: true },
+    email: { type: String, default: '' },
+    password: { type: String, default: '' },
+    deviceId: { type: String, default: '', index: true },
+    credits: { type: Number, default: 20 },
+    isPro: { type: Boolean, default: false },
+    status: { type: String, default: 'active' }, // 'active', 'banned'
+    customPrompt: { type: String, default: '' }, // VIP Khas Prompt
+    createdAt: { type: Date, default: Date.now }
 });
 
-// Serve static assets from public folder
-app.use(express.static(path.join(__dirname, '..', 'public')));
-
-// ============================================================================
-// 1. DATABASE MODELS & SCHEMAS
-// ============================================================================
-
-// User Schema
-const userSchema = new mongoose.Schema({
-    name: { type: String, default: '', trim: true },
-    email: { type: String, default: '', trim: true },
-    username: {
+const ConfigSchema = new mongoose.Schema({
+    key: { type: String, default: 'global_config', unique: true },
+    systemPrompt: {
         type: String,
-        required: true,
-        unique: true,
-        trim: true,
-        minlength: 3,
-        maxlength: 50
+        default: "You are Kammal App AI, elite video optimization engine. Guide users to achieve crisp 1080p 60fps zero-compression videos for TikTok and Instagram reels."
     },
-    passwordHash: {
+    defaultPrompt: {
         type: String,
-        required: true
+        default: "You are Kammal App AI, elite video optimization engine. Guide users to achieve crisp 1080p 60fps zero-compression videos for TikTok and Instagram reels."
     },
-    phone: { type: String, default: '', trim: true },
-    telegramId: { type: String, default: '', trim: true },
-    deviceId: { type: String, default: null, trim: true, index: true },
-    credits: { type: Number, default: 2, min: 0 },
-    isPro: { type: Boolean, default: false },
-    status: { type: String, enum: ['active', 'banned'], default: 'active' },
-    customPrompt: { type: String, default: null },
-    referredByDeviceId: { type: String, default: null },
-    referredByUsername: { type: String, default: null },
-    referralsCount: { type: Number, default: 0 },
-    referralCreditsEarned: { type: Number, default: 0 }
-}, { timestamps: true });
+    currentModel: { type: String, default: "gemini-3.1-pro-preview" },
+    maintenance: {
+        enabled: { type: Boolean, default: false },
+        message: { type: String, default: "Scheduled maintenance in progress. Services will resume shortly." }
+    }
+});
 
-const User = mongoose.models.User || mongoose.model('User', userSchema);
+const ConversationSchema = new mongoose.Schema({
+    username: String,
+    deviceId: String,
+    query: String,
+    reply: String,
+    model: String,
+    timestamp: { type: Date, default: Date.now }
+});
 
-const DEFAULT_SYSTEM_PROMPT = `You are the Kamaal Studio AI Assistant, an expert in mobile video quality, MP4 container optimization, TikTok & Instagram upload algorithms, and high-bitrate encoding.
+const User = mongoose.models.User || mongoose.model('User', UserSchema);
+const Config = mongoose.models.Config || mongoose.model('Config', ConfigSchema);
+const Conversation = mongoose.models.Conversation || mongoose.model('Conversation', ConversationSchema);
 
-Your Mission:
-1. Explain how Kamaal Studio achieves Zero Compression & Pure Quality via binary MP4 box rewriting without re-encoding.
-2. Provide practical tips for creators to achieve crisp 1080p 60fps video uploads on TikTok, Instagram Reels, and YouTube Shorts.
-3. Guide users on how to use the app, manage their device lock, and understand credits.
-
-CRITICAL SAFETY & SCOPE RULES:
-- Never provide hacking, modding, bypass scripting, or reverse-engineering instructions.
-- Never discuss unauthorized server access or circumvention of licensing.
-- Be extremely polite, professional, concise, and helpful.`;
-
-// Settings Schema
-const settingsSchema = new mongoose.Schema({
-    key: { type: String, required: true, unique: true },
-    value: { type: mongoose.Schema.Types.Mixed, required: true }
-}, { timestamps: true });
-
-const Settings = mongoose.models.Settings || mongoose.model('Settings', settingsSchema);
-
-// Conversation History Schema
-const conversationSchema = new mongoose.Schema({
-    conversationId: { type: String, required: true, unique: true, index: true },
-    username: { type: String, default: 'Guest', index: true },
-    deviceId: { type: String, default: null, index: true },
-    messages: [
-        {
-            role: { type: String, enum: ['user', 'assistant', 'system'], required: true },
-            text: { type: String, required: true },
-            timestamp: { type: Date, default: Date.now }
-        }
-    ],
-    lastUpdated: { type: Date, default: Date.now }
-}, { timestamps: true });
-
-const Conversation = mongoose.models.Conversation || mongoose.model('Conversation', conversationSchema);
-
-// Memory Stores (Fallback if MongoDB Atlas is disconnected)
-const memoryUsers = new Map();
-const memorySettings = new Map([
-    ['system_prompt', DEFAULT_SYSTEM_PROMPT],
-    ['ai_model', 'gemini-3.1'],
-    ['maintenance_mode', { enabled: false, message: 'Server is currently undergoing scheduled maintenance. Please try again soon.' }]
-]);
-const memoryConversations = new Map();
-
-// Global Kythera Configuration
-let globalKytheraConfig = {
-    app_status: {
-        status: "ACTIVE",
-        message: "System operational • Bypass ready",
-        version: "3.2.0",
-        min_supported_version: "1.0.0",
-        force_update: false
-    },
-    ffmpeg_converter: {
-        crf_extra_args: "-bf 0",
-        audio_args: "-c:a aac -b:a 192k",
-        global_extra_args: "-movflags +faststart",
-        preset: "ultrafast",
-        default_crf: 18
-    },
-    ffmpeg_compressor: {
-        audio_compress_args: "-c:a aac -b:a 128k",
-        audio_copy_args: "-c:a copy",
-        remove_metadata_args: "-map_metadata -1"
-    },
-    ai_realsr: {
-        scale_factor: "4",
-        cpu_fallback_args: "-g -1"
-    },
-    video_patcher: {
-        target_resolution: "1080x1920",
-        target_fps: 60,
-        crf: 18,
-        bypass_mode: "zero_compression_box_rewrite",
-        watermark_removal: true,
-        tiktok_60fps_unlock: true,
-        instagram_hdr_fix: true
+// In-Memory Fallback Cache
+let memoryCache = {
+    systemPrompt: "You are Kammal App AI, elite video optimization engine. Guide users to achieve crisp 1080p 60fps zero-compression videos for TikTok and Instagram reels.",
+    defaultPrompt: "You are Kammal App AI, elite video optimization engine. Guide users to achieve crisp 1080p 60fps zero-compression videos for TikTok and Instagram reels.",
+    currentModel: "gemini-3.1-pro-preview",
+    maintenance: { enabled: false, message: "Scheduled maintenance in progress." },
+    users: {
+        "ali1": { username: "ali1", credits: 50, isPro: true, status: "active", deviceId: "HW-98234-A1", customPrompt: "" },
+        "mozammil": { username: "mozammil", credits: 150, isPro: true, status: "active", deviceId: "HW-44109-MZ", customPrompt: "You are personal VIP AI assistant for Mozammil." }
     }
 };
 
-let globalAnnouncement = {
-    enabled: true,
-    title: "⚡ Kamaal Studio Cloud Online",
-    message: "Server connected. Enjoy crystal clear 60FPS video enhancement!",
-    type: "info",
-    timestamp: Date.now()
-};
-
-let generatedLicenseKeys = [
-    { code: "VIP-KAMAAL-2026", credits: 100, isPro: true, plan: "VIP PRO Lifetime", redeemedBy: null },
-    { code: "COINS-50-BOOST", credits: 50, isPro: false, plan: "50 Coins Boost", redeemedBy: null },
-    { code: "PRO-PASS-9999", credits: 500, isPro: true, plan: "Unlimited Pro", redeemedBy: null }
-];
-
-// In-Memory Support Messages Store
-const memorySupportMessages = [];
-
-// ============================================================================
-// 2. MONGOOSE CONNECTIVITY & HELPERS
-// ============================================================================
-let isMongoConnecting = false;
-
-async function ensureMongo() {
-    if (mongoose.connection.readyState === 1) return true;
-    if (isMongoConnecting) return false;
-
-    isMongoConnecting = true;
+// Database Connection
+let cachedDb = null;
+async function connectToDatabase() {
+    if (!MONGODB_URI) return false;
+    if (cachedDb && mongoose.connection.readyState === 1) return true;
     try {
-        await mongoose.connect(MONGODB_URI, {
-            serverSelectionTimeoutMS: 4000,
-            connectTimeoutMS: 4000
+        const conn = await mongoose.connect(MONGODB_URI, {
+            serverSelectionTimeoutMS: 5000,
+            bufferCommands: false
         });
-        isMongoConnecting = false;
+        cachedDb = conn;
+        console.log("MongoDB Connected Successfully to MyUsersDB ✅");
         return true;
-    } catch (err) {
-        isMongoConnecting = false;
+    } catch (e) {
+        console.warn("MongoDB Warning, using cache fallback:", e.message);
         return false;
     }
 }
 
-async function findUserByUsername(username) {
-    if (!username) return null;
-    const cleanUser = username.toString().trim();
-    const lower = cleanUser.toLowerCase();
-    
-    if (await ensureMongo()) {
-        try {
-            // Case-insensitive search using Regex
-            const user = await User.findOne({ username: { $regex: new RegExp('^' + cleanUser + '$', 'i') } });
-            if (user) return user;
-        } catch (_) {}
+app.use(async (req, res, next) => {
+    await connectToDatabase();
+    next();
+});
+
+// Admin Security Middleware
+function requireAdminAuth(req, res, next) {
+    const key = req.headers['x-admin-key'] || req.query.adminKey || req.body?.adminKey;
+    if (!key || key !== ADMIN_SECURITY_KEY) {
+        return res.status(401).json({ success: false, error: "Unauthorized: Invalid Admin Key" });
     }
-    
-    // Check Memory Store
-    for (const [key, val] of memoryUsers.entries()) {
-        if (key.toLowerCase() === lower || (val.username && val.username.toLowerCase() === lower)) {
-            return val;
-        }
-    }
-    return null;
+    next();
 }
 
-async function findUserByDeviceId(deviceId) {
-    if (!deviceId) return null;
-    const cleanDevice = deviceId.toString().trim();
-    if (await ensureMongo()) {
-        try {
-            const user = await User.findOne({ deviceId: cleanDevice });
-            if (user) return user;
-        } catch (_) {}
+async function getActiveConfig() {
+    if (cachedDb && mongoose.connection.readyState === 1) {
+        let conf = await Config.findOne({ key: 'global_config' });
+        if (!conf) {
+            conf = await Config.create({ key: 'global_config' });
+        }
+        return conf;
     }
-    for (const u of memoryUsers.values()) {
-        if (u.deviceId === cleanDevice) return u;
-    }
-    return null;
+    return memoryCache;
 }
 
-async function getSystemPrompt() {
-    if (await ensureMongo()) {
-        try {
-            const doc = await Settings.findOne({ key: 'system_prompt' });
-            if (doc && doc.value) return doc.value;
-        } catch (_) {}
-    }
-    return memorySettings.get('system_prompt') || DEFAULT_SYSTEM_PROMPT;
-}
-
-async function getAiModel() {
-    if (await ensureMongo()) {
-        try {
-            const doc = await Settings.findOne({ key: 'ai_model' });
-            if (doc && doc.value) return doc.value;
-        } catch (_) {}
-    }
-    return memorySettings.get('ai_model') || 'gemini-3.1';
-}
-
-async function getMaintenanceMode() {
-    if (await ensureMongo()) {
-        try {
-            const doc = await Settings.findOne({ key: 'maintenance_mode' });
-            if (doc && doc.value) return doc.value;
-        } catch (_) {}
-    }
-    return memorySettings.get('maintenance_mode') || { enabled: false, message: 'Undergoing maintenance' };
-}
-
-function authenticateToken(req, res, next) {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-    if (!token) return res.status(401).json({ success: false, error: 'Access token required.' });
-
-    jwt.verify(token, JWT_SECRET, (err, user) => {
-        if (err) return res.status(403).json({ success: false, error: 'Invalid or expired token.' });
-        req.user = user;
-        next();
-    });
-}
-
-// Admin Login & Password Verification Route
-app.post(['/api/admin/login', '/api/admin/auth'], (req, res) => {
-    try {
-        const { username, password, key, adminKey, admin_key } = req.body || {};
-        const candidateKey = (key || adminKey || admin_key || password || '').toString().trim();
-        const candidateUser = (username || '').toString().trim().toLowerCase();
-
-        const isValidKey = VALID_ADMIN_KEYS.has(candidateKey) || candidateKey === ADMIN_SECRET_KEY || candidateKey === ADMIN_PASSWORD;
-        const isValidCredentials = (candidateUser === 'admin' || candidateUser === 'kamaal' || candidateUser === 'owner') && 
-            (candidateKey === 'kamaal2026' || candidateKey === 'admin123' || candidateKey === 'admin' || candidateKey === ADMIN_PASSWORD || candidateKey === ADMIN_SECRET_KEY || VALID_ADMIN_KEYS.has(candidateKey));
-
-        if (isValidKey || isValidCredentials) {
-            const activeKey = process.env.ADMIN_KEY || 'KAMAAL_STUDIO_ADMIN_KEY_9999';
-            return res.json({
-                success: true,
-                message: 'Admin access granted.',
-                adminKey: activeKey,
-                user: {
-                    username: 'admin',
-                    role: 'SuperAdmin',
-                    authenticatedAt: new Date().toISOString()
-                }
-            });
-        }
-
-        return res.status(401).json({
-            success: false,
-            error: 'Invalid admin username, password, or security key. (Default: admin / kamaal2026)'
-        });
-    } catch (err) {
-        return res.status(500).json({ success: false, error: err.message });
-    }
-});
-
-// ============================================================================
-// 3. AUTHENTICATION & DEVICE BINDING ENDPOINTS
-// ============================================================================
-
-app.post(['/api/auth/register', '/auth/register', '/api/register', '/register'], async (req, res) => {
-    try {
-        const maint = await getMaintenanceMode();
-        if (maint && maint.enabled && !req.headers['x-admin-key']) {
-            return res.status(503).json({ success: false, error: maint.message || 'System under maintenance.' });
-        }
-
-        const { username, email, password, phone, telegramId, deviceId, rawDeviceId, device_id, referralCode, referredBy } = req.body;
-        const regUsername = (username || email || '').trim();
-        const effectiveDeviceId = (deviceId || rawDeviceId || device_id || '').trim();
-
-        if (!regUsername || !password) {
-            return res.status(400).json({ success: false, error: 'Username/Email and Password are required.' });
-        }
-
-        const lowerUser = regUsername.toLowerCase();
-        const existing = await findUserByUsername(lowerUser);
-        if (existing) {
-            return res.status(409).json({ success: false, error: 'Username or account already registered.' });
-        }
-
-        if (effectiveDeviceId) {
-            const bound = await findUserByDeviceId(effectiveDeviceId);
-            if (bound) {
-                return res.status(403).json({
-                    success: false,
-                    error: `Device already locked to account: "${bound.username}". Reset device lock via Admin to re-register.`
-                });
-            }
-        }
-
-        const salt = await bcrypt.genSalt(10);
-        const passwordHash = await bcrypt.hash(password, salt);
-        const refCode = (referralCode || referredBy || '').trim().toLowerCase();
-        let referrerUser = null;
-        if (refCode) {
-            referrerUser = await findUserByUsername(refCode) || await findUserByDeviceId(refCode);
-        }
-
-        let savedUser;
-        const initialCredits = 2;
-
-        if (await ensureMongo()) {
-            try {
-                const newUser = new User({
-                    name: regUsername,
-                    email: email || '',
-                    username: lowerUser,
-                    passwordHash,
-                    phone: phone || '',
-                    telegramId: telegramId || '',
-                    deviceId: effectiveDeviceId || null,
-                    credits: initialCredits,
-                    isPro: false,
-                    status: 'active',
-                    referredByUsername: referrerUser ? referrerUser.username : null,
-                    referredByDeviceId: referrerUser ? referrerUser.deviceId : null
-                });
-                savedUser = await newUser.save();
-
-                if (referrerUser) {
-                    referrerUser.referralsCount = (referrerUser.referralsCount || 0) + 1;
-                    referrerUser.referralCreditsEarned = (referrerUser.referralCreditsEarned || 0) + 3;
-                    referrerUser.credits = (referrerUser.credits || 0) + 3;
-                    if (typeof referrerUser.save === 'function') await referrerUser.save();
-                }
-            } catch (mongoErr) {
-                savedUser = null;
-            }
-        }
-
-        if (!savedUser) {
-            savedUser = {
-                _id: 'mem_' + Date.now(),
-                name: regUsername,
-                email: email || '',
-                username: lowerUser,
-                passwordHash,
-                phone: phone || '',
-                telegramId: telegramId || '',
-                deviceId: effectiveDeviceId || null,
-                credits: initialCredits,
-                isPro: false,
-                status: 'active',
-                referredByUsername: referrerUser ? referrerUser.username : null,
-                referredByDeviceId: referrerUser ? referrerUser.deviceId : null,
-                createdAt: new Date().toISOString()
-            };
-            memoryUsers.set(lowerUser, savedUser);
-            if (referrerUser) {
-                referrerUser.referralsCount = (referrerUser.referralsCount || 0) + 1;
-                referrerUser.referralCreditsEarned = (referrerUser.referralCreditsEarned || 0) + 3;
-                referrerUser.credits = (referrerUser.credits || 0) + 3;
-            }
-        }
-
-        const token = jwt.sign(
-            { id: savedUser._id, username: savedUser.username, isPro: savedUser.isPro },
-            JWT_SECRET,
-            { expiresIn: '30d' }
-        );
-
-        return res.status(201).json({
-            success: true,
-            message: 'Registration successful. 2 trial credits credited!',
-            token,
-            user: {
-                username: savedUser.username,
-                email: savedUser.email || '',
-                deviceId: savedUser.deviceId,
-                credits: savedUser.credits,
-                coins: savedUser.credits,
-                isPro: savedUser.isPro,
-                status: savedUser.status
-            }
-        });
-    } catch (err) {
-        return res.status(500).json({ success: false, error: err.message });
-    }
-});
-
-app.post(['/api/auth/login', '/auth/login', '/api/login', '/login'], async (req, res) => {
-    try {
-        const { username, email, password, deviceId, rawDeviceId, device_id } = req.body;
-        const loginIdentifier = (username || email || '').trim();
-        const effectiveDeviceId = (deviceId || rawDeviceId || device_id || '').trim();
-
-        if (!loginIdentifier || !password) {
-            return res.status(400).json({ success: false, error: 'Username/Email and Password are required.' });
-        }
-
-        const user = await findUserByUsername(loginIdentifier);
-        if (!user) {
-            return res.status(404).json({ success: false, error: 'User not found. Please register.' });
-        }
-
-        if (user.status === 'banned') {
-            return res.status(403).json({ success: false, error: 'Account has been banned. Contact Admin.' });
-        }
-
-        const isValid = await bcrypt.compare(password, user.passwordHash);
-        if (!isValid) {
-            return res.status(401).json({ success: false, error: 'Invalid password.' });
-        }
-
-        if (effectiveDeviceId) {
-            if (user.deviceId && user.deviceId !== effectiveDeviceId) {
-                return res.status(403).json({
-                    success: false,
-                    error: `Device Lock Error: Bound to device (${user.deviceId.substring(0, 10)}...). Request unbind from Admin.`
-                });
-            }
-
-            if (!user.deviceId) {
-                user.deviceId = effectiveDeviceId;
-                if (typeof user.save === 'function') await user.save();
-                else if (mongoose.connection.readyState === 1 && user._id) {
-                    await User.findByIdAndUpdate(user._id, { deviceId: effectiveDeviceId });
-                }
-            }
-        }
-
-        const token = jwt.sign(
-            { id: user._id, username: user.username, isPro: user.isPro },
-            JWT_SECRET,
-            { expiresIn: '30d' }
-        );
-
-        return res.json({
-            success: true,
-            token,
-            user: {
-                username: user.username,
-                email: user.email || '',
-                deviceId: user.deviceId,
-                credits: user.credits,
-                coins: user.credits,
-                isPro: user.isPro,
-                status: user.status
-            }
-        });
-    } catch (err) {
-        return res.status(500).json({ success: false, error: err.message });
-    }
-});
-
-app.get('/api/auth/profile', authenticateToken, async (req, res) => {
-    try {
-        const user = await findUserByUsername(req.user.username);
-        if (!user) return res.status(404).json({ success: false, error: 'User not found.' });
-
-        return res.json({
-            success: true,
-            user: {
-                username: user.username,
-                email: user.email || '',
-                phone: user.phone || '',
-                deviceId: user.deviceId,
-                credits: user.credits,
-                coins: user.credits,
-                isPro: user.isPro,
-                status: user.status
-            }
-        });
-    } catch (err) {
-        return res.status(500).json({ success: false, error: err.message });
-    }
-});
-
-app.get(['/api/auth/verify', '/api/verify'], async (req, res) => {
-    try {
-        const { deviceId, username } = req.query;
-        let user = null;
-        if (username) user = await findUserByUsername(username);
-        else if (deviceId) user = await findUserByDeviceId(deviceId);
-
-        if (!user) {
-            return res.json({
-                verified: false,
-                authorized: false,
-                isPro: false,
-                credits: 0,
-                coins: 0,
-                message: 'No active profile found.'
-            });
-        }
-
-        return res.json({
-            verified: true,
-            authorized: user.isPro || user.credits > 0,
-            isPro: user.isPro,
-            credits: user.credits,
-            coins: user.credits,
-            username: user.username,
-            deviceId: user.deviceId,
-            status: user.status
-        });
-    } catch (err) {
-        return res.status(500).json({ success: false, error: err.message });
-    }
-});
-
-app.get('/api/credits', async (req, res) => {
-    try {
-        const { username, deviceId } = req.query;
-        let user = null;
-        if (username) user = await findUserByUsername(username);
-        else if (deviceId) user = await findUserByDeviceId(deviceId);
-
-        if (!user) return res.json({ success: true, credits: 0, coins: 0, isPro: false });
-
-        return res.json({
-            success: true,
-            credits: user.credits,
-            coins: user.credits,
-            isPro: user.isPro,
-            username: user.username
-        });
-    } catch (err) {
-        return res.status(500).json({ success: false, error: err.message });
-    }
-});
-
-app.post(['/api/deduct', '/api/credits/deduct'], async (req, res) => {
-    try {
-        const { username, deviceId, amount = 1 } = req.body;
-        let user = null;
-        if (username) user = await findUserByUsername(username);
-        else if (deviceId) user = await findUserByDeviceId(deviceId);
-
-        if (!user) return res.status(404).json({ success: false, error: 'User not found.' });
-
-        if (user.isPro) {
-            return res.json({ success: true, isPro: true, remaining: user.credits, message: 'VIP Unlimited' });
-        }
-
-        if (user.credits < amount) {
-            return res.status(402).json({ success: false, error: 'Insufficient credits. Please recharge or upgrade.' });
-        }
-
-        user.credits -= amount;
-        if (typeof user.save === 'function') await user.save();
-        if (mongoose.connection.readyState === 1 && user._id) {
-            await User.findByIdAndUpdate(user._id, { credits: user.credits });
-        }
-
-        return res.json({
-            success: true,
-            remaining: user.credits,
-            coins: user.credits,
-            message: `Deducted ${amount} credit(s). Remaining: ${user.credits}`
-        });
-    } catch (err) {
-        return res.status(500).json({ success: false, error: err.message });
-    }
-});
-
-app.get(['/api/health', '/api/ping'], (req, res) => {
+// =================================================================
+// 1. PROMPT & GEMINI MODEL APIS
+// =================================================================
+app.get('/api/admin/system-prompt', requireAdminAuth, async (req, res) => {
+    const conf = await getActiveConfig();
     res.json({
         success: true,
-        status: 'online',
-        service: 'Kamaal Studio Cloud API',
-        timestamp: Date.now()
+        systemPrompt: conf.systemPrompt,
+        defaultPrompt: conf.defaultPrompt || conf.systemPrompt,
+        presets: [
+            { id: "video_optimizer", title: "🎬 Video Optimizer", prompt: conf.defaultPrompt || conf.systemPrompt },
+            { id: "sales_support", title: "💎 VIP Sales", prompt: "You are Kammal App VIP Sales Consultant." },
+            { id: "tech_troubleshooter", title: "🛠️ HW Specialist", prompt: "You are Technical Specialist for Hardware Lock." },
+            { id: "urdu_english", title: "🇵🇰 Roman Urdu", prompt: "Aap Kammal App ke bilingual assistant hain." }
+        ]
     });
 });
 
-app.post('/api/authorize-patch', authenticateToken, async (req, res) => {
+app.post('/api/admin/system-prompt', requireAdminAuth, async (req, res) => {
+    const { systemPrompt } = req.body;
+    if (!systemPrompt?.trim()) return res.status(400).json({ success: false, error: "Prompt required" });
+
+    if (cachedDb && mongoose.connection.readyState === 1) {
+        await Config.findOneAndUpdate(
+            { key: 'global_config' },
+            { systemPrompt: systemPrompt.trim() },
+            { upsert: true }
+        );
+    }
+    memoryCache.systemPrompt = systemPrompt.trim();
+    res.json({ success: true, message: "System prompt deployed to MongoDB!" });
+});
+
+app.get('/api/admin/model', requireAdminAuth, async (req, res) => {
+    const conf = await getActiveConfig();
+    res.json({ success: true, currentModel: conf.currentModel || "gemini-3.1-pro-preview" });
+});
+
+app.post('/api/admin/model', requireAdminAuth, async (req, res) => {
+    const { model } = req.body;
+    if (!model) return res.status(400).json({ success: false, error: "Model required" });
+
+    if (cachedDb && mongoose.connection.readyState === 1) {
+        await Config.findOneAndUpdate(
+            { key: 'global_config' },
+            { currentModel: model },
+            { upsert: true }
+        );
+    }
+    memoryCache.currentModel = model;
+    res.json({ success: true, message: `Model set to ${model}` });
+});
+
+app.post('/api/admin/test-prompt', requireAdminAuth, async (req, res) => {
+    const { prompt, testMessage } = req.body;
+    const conf = await getActiveConfig();
+    const modelName = resolveGeminiModel(conf.currentModel);
+
     try {
-        const user = await findUserByUsername(req.user.username);
-        if (!user) return res.status(404).json({ success: false, error: 'User not found' });
-        if (user.status === 'banned') return res.status(403).json({ success: false, error: 'Banned' });
-
-        if (user.isPro || user.credits > 0) {
-            if (!user.isPro && user.credits > 0) {
-                user.credits -= 1;
-                if (typeof user.save === 'function') await user.save();
-                if (mongoose.connection.readyState === 1 && user._id) {
-                    await User.findByIdAndUpdate(user._id, { credits: user.credits });
-                }
-            }
-            return res.json({ success: true, authorized: true, remainingCredits: user.credits, isPro: user.isPro });
+        if (genAI) {
+            const model = genAI.getGenerativeModel({
+                model: modelName,
+                systemInstruction: prompt || conf.systemPrompt
+            });
+            const result = await model.generateContent(testMessage || "Export settings test");
+            return res.json({ success: true, reply: result.response.text(), model: modelName });
         }
-
-        return res.status(402).json({ success: false, authorized: false, error: 'Insufficient credits' });
+        res.json({ success: true, reply: `[${modelName} Output]\nExport 1080x1920 60fps at 22Mbps bitrate with CRF 18.` });
     } catch (err) {
-        return res.status(500).json({ success: false, error: err.message });
+        res.status(500).json({ success: false, error: err.message });
     }
 });
 
-// AI System Prompt & Chat Endpoints
-app.get('/api/ai/system-prompt', async (req, res) => {
-    try {
-        const { username } = req.query;
-        let finalPrompt = await getSystemPrompt();
-
-        if (username) {
-            const user = await findUserByUsername(username);
-            if (user && user.customPrompt && user.customPrompt.trim().length > 0) {
-                finalPrompt = user.customPrompt;
-            }
-        }
-
-        return res.json({ success: true, prompt: finalPrompt });
-    } catch (err) {
-        return res.status(500).json({ success: false, error: err.message });
+// =================================================================
+// 2. VIP CUSTOM PROMPT (KHAS PROMPT)
+// =================================================================
+app.get('/api/admin/user-prompt/:username', requireAdminAuth, async (req, res) => {
+    const username = req.params.username;
+    if (cachedDb && mongoose.connection.readyState === 1) {
+        const user = await User.findOne({ username });
+        if (!user) return res.status(404).json({ success: false, error: "User not found" });
+        return res.json({ success: true, customPrompt: user.customPrompt || "" });
     }
+    const user = memoryCache.users[username];
+    if (!user) return res.status(404).json({ success: false, error: "User not found" });
+    res.json({ success: true, customPrompt: user.customPrompt || "" });
 });
 
-app.post('/api/ai/chat', async (req, res) => {
-    try {
-        const { message, username, conversationId, deviceId } = req.body;
-        if (!message) return res.status(400).json({ success: false, error: 'Message required' });
+app.post('/api/admin/user-prompt', requireAdminAuth, async (req, res) => {
+    const { username, customPrompt } = req.body;
+    if (!username) return res.status(400).json({ success: false, error: "Username required" });
 
-        let systemPrompt = await getSystemPrompt();
-        if (username) {
-            const user = await findUserByUsername(username);
-            if (user && user.customPrompt) systemPrompt = user.customPrompt;
-        }
+    const promptText = (customPrompt || "").trim();
 
-        const aiResponse = `[Kamaal Studio AI]: I have received your query regarding "${message.substring(0, 35)}...". Our Zero-Compression MP4 engine is ready to assist you!`;
-
-        return res.json({
-            success: true,
-            response: aiResponse,
-            conversationId: conversationId || ('conv_' + Date.now())
-        });
-    } catch (err) {
-        return res.status(500).json({ success: false, error: err.message });
+    if (cachedDb && mongoose.connection.readyState === 1) {
+        await User.findOneAndUpdate(
+            { username },
+            { $set: { customPrompt: promptText } },
+            { upsert: true }
+        );
     }
-});
-
-// Kythera Remote Antennas Engine Endpoint
-app.get(['/api/config/kythera', '/kythera_status.json', '/api/antennas', '/api/remote-config', '/api/rules', '/api/patch-rules'], async (req, res) => {
-    return res.json(globalKytheraConfig);
-});
-
-// In-App Broadcast Announcements
-app.get(['/api/announcements', '/api/broadcast'], (req, res) => {
-    return res.json({ success: true, announcement: globalAnnouncement });
-});
-
-// Key Redemption Endpoint
-app.post('/api/redeem', async (req, res) => {
-    try {
-        const { key, deviceId, email, username } = req.body;
-        if (!key || typeof key !== 'string') {
-            return res.status(400).json({ success: false, error: 'Redemption key is required.' });
-        }
-
-        const cleanKey = key.trim().toUpperCase();
-        let user = null;
-        if (username || email) user = await findUserByUsername(username || email);
-        else if (deviceId) user = await findUserByDeviceId(deviceId);
-
-        let addedCredits = 10;
-        let setPro = false;
-        let planTitle = '10 Credits Pack';
-
-        if (cleanKey.startsWith('PRO-') || cleanKey.includes('MONTH')) {
-            addedCredits = 9999;
-            setPro = true;
-            planTitle = 'Monthly Pro';
-        } else if (cleanKey.startsWith('VIP-') || cleanKey.includes('YEAR')) {
-            addedCredits = 99999;
-            setPro = true;
-            planTitle = 'Yearly VIP';
-        } else if (cleanKey.startsWith('LIFE-') || cleanKey.includes('LIFETIME')) {
-            addedCredits = 999999;
-            setPro = true;
-            planTitle = 'Lifetime VIP';
-        }
-
-        if (user) {
-            user.credits = (user.credits || 0) + addedCredits;
-            if (setPro) user.isPro = true;
-            if (typeof user.save === 'function') await user.save();
-            if (mongoose.connection.readyState === 1 && user._id) {
-                await User.findByIdAndUpdate(user._id, { credits: user.credits, isPro: user.isPro });
-            }
-        }
-
-        return res.json({
-            success: true,
-            credits: user ? user.credits : addedCredits,
-            coins: user ? user.credits : addedCredits,
-            plan: planTitle,
-            message: `Key successfully redeemed: ${planTitle} activated!`
-        });
-    } catch (err) {
-        return res.status(500).json({ success: false, error: err.message });
+    if (memoryCache.users[username]) {
+        memoryCache.users[username].customPrompt = promptText;
+    } else {
+        memoryCache.users[username] = { username, credits: 20, isPro: false, status: "active", deviceId: "", customPrompt: promptText };
     }
+
+    res.json({
+        success: true,
+        message: promptText ? `VIP Prompt saved in MongoDB for ${username} ⭐` : `Reverted ${username} to Global Prompt.`
+    });
 });
 
-// Admin Panel Routes
-app.get('/api/admin/users', authenticateAdmin, async (req, res) => {
-    try {
-        let users = [];
-        if (await ensureMongo()) {
-            users = await User.find({}).sort({ createdAt: -1 }).lean();
-        } else {
-            users = Array.from(memoryUsers.values());
+// =================================================================
+// 3. USER LEDGER & 1-DEVICE HARDWARE LOCK
+// =================================================================
+app.get('/api/admin/users', requireAdminAuth, async (req, res) => {
+    const search = (req.query.search || "").toLowerCase();
+
+    if (cachedDb && mongoose.connection.readyState === 1) {
+        let query = {};
+        if (search) {
+            query = {
+                $or: [
+                    { username: { $regex: search, $options: 'i' } },
+                    { deviceId: { $regex: search, $options: 'i' } }
+                ]
+            };
         }
+        const users = await User.find(query).lean();
         return res.json({ success: true, count: users.length, users });
-    } catch (err) {
-        return res.status(500).json({ success: false, error: err.message });
     }
+
+    let list = Object.values(memoryCache.users);
+    if (search) {
+        list = list.filter(u => u.username.toLowerCase().includes(search) || (u.deviceId && u.deviceId.toLowerCase().includes(search)));
+    }
+    res.json({ success: true, count: list.length, users: list });
 });
 
-app.post('/api/admin/ban', authenticateAdmin, async (req, res) => {
-    try {
-        const { username, userId } = req.body;
-        const user = await findUserByUsername(username || userId);
-        if (!user) return res.status(404).json({ success: false, error: 'User not found.' });
-        user.status = 'banned';
-        if (typeof user.save === 'function') await user.save();
-        if (mongoose.connection.readyState === 1 && user._id) {
-            await User.findByIdAndUpdate(user._id, { status: 'banned' });
+app.post('/api/admin/reset-device', requireAdminAuth, async (req, res) => {
+    const { username } = req.body;
+    if (cachedDb && mongoose.connection.readyState === 1) {
+        await User.findOneAndUpdate({ username }, { deviceId: "" });
+    }
+    if (memoryCache.users[username]) memoryCache.users[username].deviceId = "";
+    res.json({ success: true, message: `Hardware lock reset for ${username}` });
+});
+
+app.post('/api/admin/add-credits', requireAdminAuth, async (req, res) => {
+    const { username, amount } = req.body;
+    const qty = parseInt(amount) || 10;
+    if (cachedDb && mongoose.connection.readyState === 1) {
+        await User.findOneAndUpdate({ username }, { $inc: { credits: qty } }, { upsert: true });
+    }
+    if (memoryCache.users[username]) memoryCache.users[username].credits += qty;
+    res.json({ success: true, message: `Added ${qty} coins to ${username}` });
+});
+
+app.post('/api/admin/set-pro', requireAdminAuth, async (req, res) => {
+    const { username, isPro } = req.body;
+    if (cachedDb && mongoose.connection.readyState === 1) {
+        await User.findOneAndUpdate({ username }, { isPro: !!isPro });
+    }
+    if (memoryCache.users[username]) memoryCache.users[username].isPro = !!isPro;
+    res.json({ success: true, message: `${username} VIP status: ${isPro}` });
+});
+
+app.post('/api/admin/ban', requireAdminAuth, async (req, res) => {
+    const { username } = req.body;
+    if (cachedDb && mongoose.connection.readyState === 1) {
+        await User.findOneAndUpdate({ username }, { status: 'banned' });
+    }
+    if (memoryCache.users[username]) memoryCache.users[username].status = 'banned';
+    res.json({ success: true, message: `Banned ${username}` });
+});
+
+app.post('/api/admin/unban', requireAdminAuth, async (req, res) => {
+    const { username } = req.body;
+    if (cachedDb && mongoose.connection.readyState === 1) {
+        await User.findOneAndUpdate({ username }, { status: 'active' });
+    }
+    if (memoryCache.users[username]) memoryCache.users[username].status = 'active';
+    res.json({ success: true, message: `Unbanned ${username}` });
+});
+
+// =================================================================
+// 4. APP MAINTENANCE / EMERGENCY FREEZE
+// =================================================================
+app.get('/api/admin/maintenance', async (req, res) => {
+    const conf = await getActiveConfig();
+    res.json({ success: true, maintenance: conf.maintenance });
+});
+
+app.post('/api/admin/maintenance', requireAdminAuth, async (req, res) => {
+    const { enabled, message } = req.body;
+    const maintData = { enabled: !!enabled, message: message || "App undergoing maintenance." };
+
+    if (cachedDb && mongoose.connection.readyState === 1) {
+        await Config.findOneAndUpdate(
+            { key: 'global_config' },
+            { maintenance: maintData },
+            { upsert: true }
+        );
+    }
+    memoryCache.maintenance = maintData;
+    res.json({ success: true, message: enabled ? "App FROZEN globally." : "App UNFROZEN." });
+});
+
+// =================================================================
+// 5. ANDROID APP CHAT & HARDWARE ENFORCEMENT ENDPOINT
+// =================================================================
+app.post('/api/chat', async (req, res) => {
+    const conf = await getActiveConfig();
+    if (conf.maintenance?.enabled) {
+        return res.status(503).json({ success: false, error: conf.maintenance.message || "Maintenance in progress." });
+    }
+
+    const { username, message, deviceId } = req.body;
+    if (!message) return res.status(400).json({ success: false, error: "Message required" });
+
+    let effectivePrompt = conf.systemPrompt;
+
+    if (username) {
+        if (cachedDb && mongoose.connection.readyState === 1) {
+            let user = await User.findOne({ username });
+            if (!user) {
+                user = await User.create({ username, deviceId: deviceId || '', credits: 20 });
+            }
+
+            if (user.status === 'banned') {
+                return res.status(403).json({ success: false, error: "Your account has been suspended." });
+            }
+
+            // 1-Device Lock Check
+            if (user.deviceId && deviceId && user.deviceId !== deviceId) {
+                return res.status(403).json({ success: false, error: "Hardware Mismatch: Account bound to another phone. Contact Admin." });
+            }
+
+            if (!user.deviceId && deviceId) {
+                user.deviceId = deviceId;
+                await user.save();
+            }
+
+            if (user.customPrompt && user.customPrompt.trim()) {
+                effectivePrompt = user.customPrompt.trim();
+            }
         }
-        return res.json({ success: true, message: `User ${user.username} BANNED.`, user });
-    } catch (err) {
-        return res.status(500).json({ success: false, error: err.message });
     }
-});
 
-app.post('/api/admin/unban', authenticateAdmin, async (req, res) => {
+    const modelToUse = resolveGeminiModel(conf.currentModel);
+
     try {
-        const { username, userId } = req.body;
-        const user = await findUserByUsername(username || userId);
-        if (!user) return res.status(404).json({ success: false, error: 'User not found.' });
-        user.status = 'active';
-        if (typeof user.save === 'function') await user.save();
-        if (mongoose.connection.readyState === 1 && user._id) {
-            await User.findByIdAndUpdate(user._id, { status: 'active' });
+        if (genAI) {
+            const model = genAI.getGenerativeModel({ model: modelToUse, systemInstruction: effectivePrompt });
+            const result = await model.generateContent(message);
+            const reply = result.response.text();
+
+            if (cachedDb && mongoose.connection.readyState === 1) {
+                Conversation.create({ username, deviceId, query: message, reply, model: modelToUse }).catch(() => {});
+            }
+
+            return res.json({ success: true, reply, model: modelToUse });
         }
-        return res.json({ success: true, message: `User ${user.username} UNBANNED.`, user });
-    } catch (err) {
-        return res.status(500).json({ success: false, error: err.message });
+
+        res.json({ success: true, reply: `Kammal AI: ${message} optimized for 1080p 60fps.` });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
     }
 });
 
-app.post('/api/admin/set-pro', authenticateAdmin, async (req, res) => {
-    try {
-        const { username, userId, isPro } = req.body;
-        const user = await findUserByUsername(username || userId);
-        if (!user) return res.status(404).json({ success: false, error: 'User not found.' });
-        user.isPro = (isPro !== false);
-        if (typeof user.save === 'function') await user.save();
-        if (mongoose.connection.readyState === 1 && user._id) {
-            await User.findByIdAndUpdate(user._id, { isPro: user.isPro });
-        }
-        return res.json({ success: true, message: `User ${user.username} PRO plan set to ${user.isPro}.`, user });
-    } catch (err) {
-        return res.status(500).json({ success: false, error: err.message });
-    }
+// Admin Page Route
+app.get(['/', '/admin'], (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
-app.post('/api/admin/add-credits', authenticateAdmin, async (req, res) => {
-    try {
-        const { username, userId, amount } = req.body;
-        const user = await findUserByUsername(username || userId);
-        if (!user) return res.status(404).json({ success: false, error: 'User not found.' });
-        const creditsToAdd = Number(amount) || 10;
-        user.credits = (Number(user.credits) || 0) + creditsToAdd;
-        if (typeof user.save === 'function') await user.save();
-        if (mongoose.connection.readyState === 1 && user._id) {
-            await User.findByIdAndUpdate(user._id, { credits: user.credits });
-        }
-        return res.json({ success: true, message: `Added ${creditsToAdd} coins to ${user.username}. Balance: ${user.credits}`, user, credits: user.credits });
-    } catch (err) {
-        return res.status(500).json({ success: false, error: err.message });
-    }
-});
-
-app.post('/api/admin/remove-credits', authenticateAdmin, async (req, res) => {
-    try {
-        const { username, userId, amount } = req.body;
-        const user = await findUserByUsername(username || userId);
-        if (!user) return res.status(404).json({ success: false, error: 'User not found.' });
-        const creditsToSubtract = Number(amount) || 1;
-        user.credits = Math.max(0, (Number(user.credits) || 0) - creditsToSubtract);
-        if (typeof user.save === 'function') await user.save();
-        if (mongoose.connection.readyState === 1 && user._id) {
-            await User.findByIdAndUpdate(user._id, { credits: user.credits });
-        }
-        return res.json({ success: true, message: `Subtracted ${creditsToSubtract} coins from ${user.username}. Balance: ${user.credits}`, user, credits: user.credits });
-    } catch (err) {
-        return res.status(500).json({ success: false, error: err.message });
-    }
-});
-
-app.post('/api/admin/reset-device', authenticateAdmin, async (req, res) => {
-    try {
-        const { username, userId } = req.body;
-        const user = await findUserByUsername(username || userId);
-        if (!user) return res.status(404).json({ success: false, error: 'User not found.' });
-        user.deviceId = null;
-        if (typeof user.save === 'function') await user.save();
-        if (mongoose.connection.readyState === 1 && user._id) {
-            await User.findByIdAndUpdate(user._id, { deviceId: null });
-        }
-        return res.json({ success: true, message: `Device lock released for ${user.username}. Will bind on next login.`, user });
-    } catch (err) {
-        return res.status(500).json({ success: false, error: err.message });
-    }
-});
-
-app.post('/api/admin/bind-device', authenticateAdmin, async (req, res) => {
-    try {
-        const { username, userId, deviceId } = req.body;
-        if (!deviceId || typeof deviceId !== 'string') return res.status(400).json({ success: false, error: 'Valid deviceId required.' });
-        const user = await findUserByUsername(username || userId);
-        if (!user) return res.status(404).json({ success: false, error: 'User not found.' });
-        user.deviceId = deviceId.trim();
-        if (typeof user.save === 'function') await user.save();
-        if (mongoose.connection.readyState === 1 && user._id) {
-            await User.findByIdAndUpdate(user._id, { deviceId: user.deviceId });
-        }
-        return res.json({ success: true, message: `Bound ${user.username} to device: ${user.deviceId}`, user });
-    } catch (err) {
-        return res.status(500).json({ success: false, error: err.message });
-    }
-});
-
-app.post('/api/admin/set-credits', authenticateAdmin, async (req, res) => {
-    try {
-        const { username, credits, isPro } = req.body;
-        const user = await findUserByUsername(username);
-        if (!user) return res.status(404).json({ success: false, error: 'User not found.' });
-
-        if (credits !== undefined) user.credits = Math.max(0, parseInt(credits) || 0);
-        if (isPro !== undefined) user.isPro = Boolean(isPro);
-
-        if (typeof user.save === 'function') await user.save();
-        if (mongoose.connection.readyState === 1 && user._id) {
-            await User.findByIdAndUpdate(user._id, { credits: user.credits, isPro: user.isPro });
-        }
-        return res.json({ success: true, user: { username: user.username, credits: user.credits, isPro: user.isPro } });
-    } catch (err) {
-        return res.status(500).json({ success: false, error: err.message });
-    }
-});
-
-app.get('/api/admin/conversations', authenticateAdmin, async (req, res) => {
-    try {
-        let list = [];
-        if (await ensureMongo()) {
-            list = await Conversation.find({}).sort({ updatedAt: -1 }).limit(50).lean();
-        } else {
-            list = Array.from(memoryConversations.values());
-        }
-        return res.json({ success: true, count: list.length, conversations: list });
-    } catch (err) {
-        return res.json({ success: true, count: 0, conversations: [] });
-    }
-});
-
-app.get('/api/admin/referrals', authenticateAdmin, async (req, res) => {
-    try {
-        let users = [];
-        if (await ensureMongo()) {
-            users = await User.find({ referralsCount: { $gt: 0 } }).sort({ referralsCount: -1 }).limit(50).lean();
-        }
-        return res.json({
-            success: true,
-            totalReferrals: users.reduce((acc, u) => acc + (u.referralsCount || 0), 0),
-            totalCreditsGifted: users.reduce((acc, u) => acc + (u.referralCreditsEarned || 0), 0),
-            leaderboard: users
-        });
-    } catch (err) {
-        return res.json({ success: true, totalReferrals: 0, totalCreditsGifted: 0, leaderboard: [] });
-    }
-});
-
-app.get(['/admin', '/dashboard'], (req, res) => {
-    res.sendFile(path.join(__dirname, '..', 'public', 'admin.html'));
-});
-
-app.get('/help', (req, res) => {
-    res.sendFile(path.join(__dirname, '..', 'public', 'help.html'));
-});
-
-app.get('/', (req, res) => {
-    const accept = req.headers.accept || '';
-    if (accept.includes('text/html')) {
-        return res.sendFile(path.join(__dirname, '..', 'public', 'admin.html'));
-    }
-    return res.json({
-        service: 'Kamaal Studio API',
-        status: 'active',
-        version: '3.2.0',
-        model: 'gemini-3.1',
-        adminPanel: '/admin'
-    });
-});
-
-// Export Express App for Vercel Serverless Function
 module.exports = app;
+
+if (process.env.NODE_ENV !== 'production') {
+    app.listen(PORT, () => console.log(`Kammal Server running on port ${PORT}`));
+        }
