@@ -15,7 +15,7 @@ const cors = require("cors");
 const path = require("path");
 const crypto = require("crypto");
 const mongoose = require("mongoose");
-const { GoogleGenerativeAI } = require("@google/genai");
+const { GoogleGenerativeAI } = require("@google/generative-ai);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
