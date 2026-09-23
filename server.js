@@ -18,13 +18,14 @@ const mongoose = require("mongoose");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-const ADMIN_SECURITY_KEY =
-  String(process.env.ADMIN_KEY || "ADmin").trim();
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
-const MONGODB_URI = process.env.MONGODB_URI || "";
-const OWNER_USERNAME = (process.env.OWNER_USERNAME || "mozammil").trim().toLowerCase();
-const OWNER_USER_ID = process.env.OWNER_USER_ID || "";
+// Kammal deployment config is intentionally embedded here so this build does not depend on .env/Vercel env vars.
+// WARNING: keeping secrets in source code means anyone with source access can read them.
+const PORT = 3000;
+const ADMIN_SECURITY_KEY = "ADmin";
+const GEMINI_API_KEY = "AQ.Ab8RN6JuMBo0DJlTvLnDzFEjQb0jk5qgCVFZNcpsy1QspnjL1g";
+const MONGODB_URI = "mongodb+srv://pukathub_db_user:AWiAL8UUwrOQ6h33@cluster0.y2lzfvn.mongodb.net/MyUsersDB?retryWrites=true&w=majority";
+const OWNER_USERNAME = "mozammil";
+const OWNER_USER_ID = "";
 const OWNER_CREDITS = 9999999;
 const TOKEN_TTL_DAYS = 30;
 
@@ -173,7 +174,7 @@ async function requireDatabase(req, res, next) {
   if (!connected || mongoose.connection.readyState !== 1) {
     return res.status(503).json({
       success: false,
-      error: "Database unavailable. Check MONGODB_URI, MongoDB Atlas network access, and Vercel environment variables.",
+      error: "Database unavailable. Check the hardcoded MongoDB connection and MongoDB Atlas network access.",
       code: "DATABASE_UNAVAILABLE"
     });
   }
@@ -535,21 +536,6 @@ app.post("/api/admin/chat/:userId/message",requireAdminAuth,requireDatabase,asyn
   c.lastMessage=text;c.lastMessageAt=msg.createdAt;c.lastSenderId=owner._id;c.unreadCounts.set(String(target._id),Number(c.unreadCounts.get(String(target._id))||0)+1);await c.save();
   res.json({success:true,message:{id:String(msg._id),senderId:String(msg.senderId),receiverId:String(msg.receiverId),message:msg.message,createdAt:msg.createdAt}});
 });
-app.get("/api/admin/chat/:userId/messages",requireAdminAuth,requireDatabase,async(req,res)=>{
-  const target=await User.findById(req.params.userId);
-  if(!target)return res.status(404).json({success:false,error:"User not found"});
-  let owner=OWNER_USER_ID?await User.findById(OWNER_USER_ID):await User.findOne({username:OWNER_USERNAME});
-  if(!owner) owner=await User.findOne({role:"owner"});
-  if(!owner)return res.status(404).json({success:false,error:"Owner account not found"});
-  const key=pairKey(owner._id,target._id);
-  const c=await ChatConversation.findOne({participantKey:key});
-  if(!c)return res.json({success:true,messages:[]});
-  const messages=await Message.find({conversationId:c._id,deletedAt:null}).sort({createdAt:1}).limit(500).lean();
-  await Message.updateMany({conversationId:c._id,receiverId:owner._id,readAt:null},{$set:{readAt:new Date()}});
-  c.unreadCounts.set(String(owner._id),0);
-  await c.save();
-  res.json({success:true,messages:messages.map(m=>({id:String(m._id),senderId:String(m.senderId),receiverId:String(m.receiverId),message:m.message,readAt:m.readAt,createdAt:m.createdAt}))});
-});
 
 // Legacy AI endpoint preserved; authenticated clients should use /api/auth/me and token.
 app.post("/api/chat",async(req,res)=>{
@@ -577,4 +563,4 @@ app.post("/api/admin/maintenance",requireAdminAuth,requireDatabase,async(req,res
 app.get(["/","/admin"],(req,res)=>res.sendFile(path.join(__dirname,"public","admin.html")));
 
 module.exports=app;
-if(process.env.NODE_ENV!=="production")app.listen(PORT,()=>console.log(`Kammal server running on ${PORT}`));
+if (require.main === module) app.listen(PORT, () => console.log(`Kammal server running on ${PORT}`));
