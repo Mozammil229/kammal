@@ -1,6 +1,6 @@
 {
   "name": "kammal-backend",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Kammal App backend with MongoDB, Gemini, plans and text chat",
   "main": "server.js",
   "scripts": {
