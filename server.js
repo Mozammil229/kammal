@@ -126,6 +126,8 @@ const CreditTransaction = mongoose.models.CreditTransaction || mongoose.model("C
 const Session = mongoose.models.Session || mongoose.model("Session", SessionSchema);
 
 let cachedDb = null;
+let dbConnectPromise = null;
+let lastDbError = null;
 let memoryCache = {
   systemPrompt: "You are Kammal App AI, an intelligent assistant.",
   defaultPrompt: "You are Kammal App AI, an intelligent assistant.",
@@ -135,18 +137,54 @@ let memoryCache = {
 };
 
 async function connectToDatabase() {
-  if (!MONGODB_URI) return false;
-  if (cachedDb && mongoose.connection.readyState === 1) return true;
-  try {
-    cachedDb = await mongoose.connect(MONGODB_URI, { serverSelectionTimeoutMS: 5000, bufferCommands: false });
-    return true;
-  } catch (e) {
-    console.warn("MongoDB connection warning:", e.message);
+  if (!MONGODB_URI) {
+    lastDbError = new Error("MONGODB_URI is not configured.");
     return false;
   }
+  if (mongoose.connection.readyState === 1) return true;
+  if (dbConnectPromise) return dbConnectPromise;
+
+  dbConnectPromise = mongoose.connect(MONGODB_URI, {
+    serverSelectionTimeoutMS: 8000,
+    connectTimeoutMS: 8000,
+    socketTimeoutMS: 20000,
+    maxPoolSize: 10,
+    minPoolSize: 0,
+    bufferCommands: false
+  }).then((db) => {
+    cachedDb = db;
+    lastDbError = null;
+    console.log("MongoDB connected:", db.connection.name);
+    return true;
+  }).catch((e) => {
+    lastDbError = e;
+    cachedDb = null;
+    console.error("MongoDB connection failed:", e.message);
+    return false;
+  }).finally(() => {
+    dbConnectPromise = null;
+  });
+
+  return dbConnectPromise;
 }
 
-app.use(async (req, res, next) => { await connectToDatabase(); next(); });
+async function requireDatabase(req, res, next) {
+  const connected = await connectToDatabase();
+  if (!connected || mongoose.connection.readyState !== 1) {
+    return res.status(503).json({
+      success: false,
+      error: "Database unavailable. Check MONGODB_URI, MongoDB Atlas network access, and Vercel environment variables.",
+      code: "DATABASE_UNAVAILABLE"
+    });
+  }
+  next();
+}
+
+app.use(async (req, res, next) => {
+  await connectToDatabase();
+  res.set("Cache-Control", "no-store");
+  next();
+});
 
 function hashToken(token) {
   return crypto.createHash("sha256").update(token).digest("hex");
@@ -284,7 +322,7 @@ async function grantPlan(user, planType, durationDays = null) {
 }
 
 // ---------- AUTH ----------
-app.post("/api/auth/register", async (req, res) => {
+app.post("/api/auth/register", requireDatabase, async (req, res) => {
   try {
     const username = String(req.body.username || "").trim();
     const password = String(req.body.password || "");
@@ -293,17 +331,24 @@ app.post("/api/auth/register", async (req, res) => {
     if (!username || username.length < 3 || username.length > 32) return res.status(400).json({ success:false, error:"Username must be 3-32 characters." });
     if (!/^[a-zA-Z0-9_.-]+$/.test(username)) return res.status(400).json({ success:false, error:"Invalid username." });
     if (password.length < 6) return res.status(400).json({ success:false, error:"Password must be at least 6 characters." });
-    if (cachedDb && mongoose.connection.readyState === 1) {
-      if (await User.findOne({ username })) return res.status(409).json({ success:false, error:"Username already exists." });
-      const user = await User.create({ username, email, deviceId, passwordHash: hashPassword(password), credits: 20 });
-      await normalizeOwner(user);
-      return issueToken(res, user);
-    }
-    if (memoryCache.users[username]) return res.status(409).json({ success:false, error:"Username already exists." });
-    const user = { _id: crypto.randomUUID(), username, email, deviceId, passwordHash: hashPassword(password), credits:20, isPro:false, status:"active", customPrompt:"", role:"user", planType:"free", planStatus:"inactive", isLifetime:false, createdAt:new Date() };
-    memoryCache.users[username] = user;
-    return res.json({ success:true, token: makeToken(), user:safeUser(user) });
-  } catch (e) { res.status(500).json({ success:false, error:"Registration failed." }); }
+
+    const existing = await User.findOne({ username });
+    if (existing) return res.status(409).json({ success:false, error:"Username already exists." });
+
+    const user = await User.create({
+      username,
+      email,
+      deviceId,
+      passwordHash: hashPassword(password),
+      credits: 20
+    });
+    await normalizeOwner(user);
+    return issueToken(res, user);
+  } catch (e) {
+    console.error("Registration error:", e);
+    if (e && e.code === 11000) return res.status(409).json({ success:false, error:"Username already exists." });
+    return res.status(500).json({ success:false, error:"Registration failed." });
+  }
 });
 async function issueToken(res, user) {
   const token = makeToken();
@@ -311,7 +356,7 @@ async function issueToken(res, user) {
   if (cachedDb && mongoose.connection.readyState === 1) await Session.create({ tokenHash:hashToken(token), userId:user._id, expiresAt });
   return res.json({ success:true, token, expiresAt, user:safeUser(user) });
 }
-app.post("/api/auth/login", async (req, res) => {
+app.post("/api/auth/login", requireDatabase, async (req, res) => {
   try {
     const username = String(req.body.username || "").trim();
     const password = String(req.body.password || "");
@@ -329,6 +374,18 @@ app.post("/api/auth/login", async (req, res) => {
   } catch (e) { res.status(500).json({ success:false, error:"Login failed." }); }
 });
 app.get("/api/auth/me", requireUser, async (req,res) => res.json({success:true,user:safeUser(req.user)}));
+
+// ---------- DATABASE HEALTH ----------
+app.get("/api/health", async (req,res) => {
+  const connected = await connectToDatabase();
+  res.status(connected ? 200 : 503).json({
+    success: connected,
+    database: connected ? "mongodb" : "unavailable",
+    readyState: mongoose.connection.readyState,
+    databaseName: connected ? mongoose.connection.name : null,
+    error: connected ? null : (lastDbError?.message || "Unknown database error")
+  });
+});
 
 // ---------- EXISTING AI / ADMIN ----------
 app.get("/api/admin/verify", requireAdminAuth, (req, res) => {
@@ -350,7 +407,7 @@ app.post("/api/admin/system-prompt", requireAdminAuth, async(req,res)=>{
   memoryCache.systemPrompt=p; res.json({success:true,message:"Global prompt saved."});
 });
 app.get("/api/admin/model",requireAdminAuth,async(req,res)=>{const c=await getActiveConfig();res.json({success:true,currentModel:c.currentModel||"gemini-3.1-pro-preview"});});
-app.post("/api/admin/model",requireAdminAuth,async(req,res)=>{const model=String(req.body.model||"").trim();if(!model)return res.status(400).json({success:false,error:"Model required"});if(cachedDb&&mongoose.connection.readyState===1)await Config.findOneAndUpdate({key:"global_config"},{$set:{currentModel:model}},{upsert:true});memoryCache.currentModel=model;res.json({success:true,message:"Model updated."});});
+app.post("/api/admin/model",requireAdminAuth,requireDatabase,async(req,res)=>{const model=String(req.body.model||"").trim();if(!model)return res.status(400).json({success:false,error:"Model required"});if(cachedDb&&mongoose.connection.readyState===1)await Config.findOneAndUpdate({key:"global_config"},{$set:{currentModel:model}},{upsert:true});memoryCache.currentModel=model;res.json({success:true,message:"Model updated."});});
 app.post("/api/admin/test-prompt",requireAdminAuth,async(req,res)=>{
   const c=await getActiveConfig(), modelName=resolveGeminiModel(c.currentModel);
   try { if(!genAI)return res.json({success:true,reply:`[${modelName}] ${req.body.testMessage||"Test"}`,model:modelName});
@@ -362,31 +419,32 @@ app.get("/api/admin/user-prompt/:username",requireAdminAuth,async(req,res)=>{
   const u=await getUserByUsername(req.params.username);if(!u)return res.status(404).json({success:false,error:"User not found"});
   res.json({success:true,customPrompt:u.customPrompt||"",usingCustomPrompt:!!u.customPrompt});
 });
-app.post("/api/admin/user-prompt",requireAdminAuth,async(req,res)=>{
+app.post("/api/admin/user-prompt",requireAdminAuth,requireDatabase,async(req,res)=>{
   const username=String(req.body.username||"").trim(), customPrompt=String(req.body.customPrompt||"").trim();
   const u=await getUserByUsername(username);if(!u)return res.status(404).json({success:false,error:"User not found"});
   u.customPrompt=customPrompt;if(cachedDb&&mongoose.connection.readyState===1)await u.save();
   res.json({success:true,message:customPrompt?"Custom prompt saved.":"Reverted to global prompt."});
 });
-app.get("/api/admin/users",requireAdminAuth,async(req,res)=>{
-  const search=String(req.query.search||"").trim();
-  if(cachedDb&&mongoose.connection.readyState===1){
+app.get("/api/admin/users",requireAdminAuth,requireDatabase,async(req,res)=>{
+  try {
+    const search=String(req.query.search||"").trim();
     const q=search?{$or:[{username:{$regex:search,$options:"i"}},{deviceId:{$regex:search,$options:"i"}}]}:{};
     const users=await User.find(q).sort({createdAt:-1}).lean();
-    return res.json({success:true,count:users.length,users:users.map(safeUser)});
+    res.json({success:true,count:users.length,users:users.map(safeUser),source:"mongodb"});
+  } catch(e) {
+    console.error("Admin users query error:", e);
+    res.status(500).json({success:false,error:"Failed to load users from MongoDB."});
   }
-  let list=Object.values(memoryCache.users);if(search)list=list.filter(u=>u.username.toLowerCase().includes(search.toLowerCase()));
-  res.json({success:true,count:list.length,users:list.map(safeUser)});
 });
-app.post("/api/admin/reset-device",requireAdminAuth,async(req,res)=>{const u=await getUserByUsername(req.body.username);if(!u)return res.status(404).json({success:false,error:"User not found"});u.deviceId="";if(cachedDb&&mongoose.connection.readyState===1)await u.save();res.json({success:true,message:"Device reset."});});
-app.post("/api/admin/add-credits",requireAdminAuth,async(req,res)=>{
+app.post("/api/admin/reset-device",requireAdminAuth,requireDatabase,async(req,res)=>{const u=await getUserByUsername(req.body.username);if(!u)return res.status(404).json({success:false,error:"User not found"});u.deviceId="";if(cachedDb&&mongoose.connection.readyState===1)await u.save();res.json({success:true,message:"Device reset."});});
+app.post("/api/admin/add-credits",requireAdminAuth,requireDatabase,async(req,res)=>{
   const u=await getUserByUsername(req.body.username);if(!u)return res.status(404).json({success:false,error:"User not found"});
   if(isOwner(u)) return res.json({success:true,credits:OWNER_CREDITS,message:"Owner credits are protected."});
   const qty=Math.max(0,parseInt(req.body.amount,10)||0);u.credits+=qty;if(cachedDb&&mongoose.connection.readyState===1)await u.save();await creditLog(u,"ADMIN_ADD",qty,"Admin credit grant");res.json({success:true,credits:u.credits});
 });
-app.post("/api/admin/set-credits",requireAdminAuth,async(req,res)=>{const u=await getUserByUsername(req.body.username);if(!u)return res.status(404).json({success:false,error:"User not found"});if(isOwner(u))return res.json({success:true,credits:OWNER_CREDITS,message:"Owner credits protected."});u.credits=Math.max(0,parseInt(req.body.credits,10)||0);if(cachedDb&&mongoose.connection.readyState===1)await u.save();res.json({success:true,credits:u.credits});});
-app.post("/api/admin/set-pro",requireAdminAuth,async(req,res)=>{const u=await getUserByUsername(req.body.username);if(!u)return res.status(404).json({success:false,error:"User not found"});if(isOwner(u))return res.json({success:true,message:"Owner is permanently PRO."});u.isPro=!!req.body.isPro;if(cachedDb&&mongoose.connection.readyState===1)await u.save();res.json({success:true,isPro:u.isPro});});
-app.post("/api/admin/set-plan",requireAdminAuth,async(req,res)=>{
+app.post("/api/admin/set-credits",requireAdminAuth,requireDatabase,async(req,res)=>{const u=await getUserByUsername(req.body.username);if(!u)return res.status(404).json({success:false,error:"User not found"});if(isOwner(u))return res.json({success:true,credits:OWNER_CREDITS,message:"Owner credits protected."});u.credits=Math.max(0,parseInt(req.body.credits,10)||0);if(cachedDb&&mongoose.connection.readyState===1)await u.save();res.json({success:true,credits:u.credits});});
+app.post("/api/admin/set-pro",requireAdminAuth,requireDatabase,async(req,res)=>{const u=await getUserByUsername(req.body.username);if(!u)return res.status(404).json({success:false,error:"User not found"});if(isOwner(u))return res.json({success:true,message:"Owner is permanently PRO."});u.isPro=!!req.body.isPro;if(cachedDb&&mongoose.connection.readyState===1)await u.save();res.json({success:true,isPro:u.isPro});});
+app.post("/api/admin/set-plan",requireAdminAuth,requireDatabase,async(req,res)=>{
   const u=await getUserByUsername(req.body.username);if(!u)return res.status(404).json({success:false,error:"User not found"});
   if(isOwner(u))return res.json({success:true,message:"Owner is permanently Lifetime."});
   const type=String(req.body.planType||"free");
@@ -396,9 +454,9 @@ app.post("/api/admin/set-plan",requireAdminAuth,async(req,res)=>{
   if(type!=="lifetime" && parseInt(req.body.credits,10)>=0){u.credits=parseInt(req.body.credits,10);await u.save();}
   res.json({success:true,user:safeUser(u)});
 });
-app.post("/api/admin/ban",requireAdminAuth,async(req,res)=>{const u=await getUserByUsername(req.body.username);if(!u)return res.status(404).json({success:false,error:"User not found"});if(isOwner(u))return res.status(403).json({success:false,error:"Owner cannot be banned"});u.status="banned";if(cachedDb&&mongoose.connection.readyState===1)await u.save();res.json({success:true});});
-app.post("/api/admin/unban",requireAdminAuth,async(req,res)=>{const u=await getUserByUsername(req.body.username);if(!u)return res.status(404).json({success:false,error:"User not found"});u.status="active";if(cachedDb&&mongoose.connection.readyState===1)await u.save();res.json({success:true});});
-app.get("/api/admin/credit-ledger/:username",requireAdminAuth,async(req,res)=>{const u=await getUserByUsername(req.params.username);if(!u)return res.status(404).json({success:false,error:"User not found"});const rows=cachedDb&&mongoose.connection.readyState===1?await CreditTransaction.find({userId:u._id}).sort({createdAt:-1}).limit(200):[];res.json({success:true,ledger:rows});});
+app.post("/api/admin/ban",requireAdminAuth,requireDatabase,async(req,res)=>{const u=await getUserByUsername(req.body.username);if(!u)return res.status(404).json({success:false,error:"User not found"});if(isOwner(u))return res.status(403).json({success:false,error:"Owner cannot be banned"});u.status="banned";if(cachedDb&&mongoose.connection.readyState===1)await u.save();res.json({success:true});});
+app.post("/api/admin/unban",requireAdminAuth,requireDatabase,async(req,res)=>{const u=await getUserByUsername(req.body.username);if(!u)return res.status(404).json({success:false,error:"User not found"});u.status="active";if(cachedDb&&mongoose.connection.readyState===1)await u.save();res.json({success:true});});
+app.get("/api/admin/credit-ledger/:username",requireAdminAuth,requireDatabase,async(req,res)=>{const u=await getUserByUsername(req.params.username);if(!u)return res.status(404).json({success:false,error:"User not found"});const rows=cachedDb&&mongoose.connection.readyState===1?await CreditTransaction.find({userId:u._id}).sort({createdAt:-1}).limit(200):[];res.json({success:true,ledger:rows});});
 
 // ---------- CHAT ----------
 function pairKey(a,b){return [String(a),String(b)].sort().join(":");}
@@ -460,14 +518,12 @@ app.post("/api/chats/:conversationId/messages",requireUser,async(req,res)=>{
 });
 
 // owner/admin inbox helpers
-app.get("/api/admin/chat/users",requireAdminAuth,async(req,res)=>{
-  if(!(cachedDb&&mongoose.connection.readyState===1))return res.json({success:true,users:[]});
+app.get("/api/admin/chat/users",requireAdminAuth,requireDatabase,async(req,res)=>{
   const q=String(req.query.search||"").trim();
   const users=await User.find(q?{username:{$regex:q,$options:"i"}}:{}).sort({createdAt:-1}).limit(200);
   res.json({success:true,users:users.map(safeUser)});
 });
-app.post("/api/admin/chat/:userId/message",requireAdminAuth,async(req,res)=>{
-  if(!(cachedDb&&mongoose.connection.readyState===1))return res.status(503).json({success:false,error:"Chat database unavailable."});
+app.post("/api/admin/chat/:userId/message",requireAdminAuth,requireDatabase,async(req,res)=>{
   const target=await User.findById(req.params.userId);if(!target)return res.status(404).json({success:false,error:"User not found"});
   let owner=OWNER_USER_ID?await User.findById(OWNER_USER_ID):await User.findOne({username:OWNER_USERNAME});
   if(!owner){owner=await User.findOne({role:"owner"});}
@@ -478,6 +534,21 @@ app.post("/api/admin/chat/:userId/message",requireAdminAuth,async(req,res)=>{
   const msg=await Message.create({conversationId:c._id,senderId:owner._id,receiverId:target._id,message:text});
   c.lastMessage=text;c.lastMessageAt=msg.createdAt;c.lastSenderId=owner._id;c.unreadCounts.set(String(target._id),Number(c.unreadCounts.get(String(target._id))||0)+1);await c.save();
   res.json({success:true,message:{id:String(msg._id),senderId:String(msg.senderId),receiverId:String(msg.receiverId),message:msg.message,createdAt:msg.createdAt}});
+});
+app.get("/api/admin/chat/:userId/messages",requireAdminAuth,requireDatabase,async(req,res)=>{
+  const target=await User.findById(req.params.userId);
+  if(!target)return res.status(404).json({success:false,error:"User not found"});
+  let owner=OWNER_USER_ID?await User.findById(OWNER_USER_ID):await User.findOne({username:OWNER_USERNAME});
+  if(!owner) owner=await User.findOne({role:"owner"});
+  if(!owner)return res.status(404).json({success:false,error:"Owner account not found"});
+  const key=pairKey(owner._id,target._id);
+  const c=await ChatConversation.findOne({participantKey:key});
+  if(!c)return res.json({success:true,messages:[]});
+  const messages=await Message.find({conversationId:c._id,deletedAt:null}).sort({createdAt:1}).limit(500).lean();
+  await Message.updateMany({conversationId:c._id,receiverId:owner._id,readAt:null},{$set:{readAt:new Date()}});
+  c.unreadCounts.set(String(owner._id),0);
+  await c.save();
+  res.json({success:true,messages:messages.map(m=>({id:String(m._id),senderId:String(m.senderId),receiverId:String(m.receiverId),message:m.message,readAt:m.readAt,createdAt:m.createdAt}))});
 });
 
 // Legacy AI endpoint preserved; authenticated clients should use /api/auth/me and token.
@@ -500,8 +571,8 @@ app.post("/api/chat",async(req,res)=>{
   }catch(e){res.status(500).json({success:false,error:e.message});}
 });
 
-app.get("/api/admin/maintenance",async(req,res)=>{const c=await getActiveConfig();res.json({success:true,maintenance:c.maintenance});});
-app.post("/api/admin/maintenance",requireAdminAuth,async(req,res)=>{const d={enabled:!!req.body.enabled,message:String(req.body.message||"App undergoing maintenance.")};if(cachedDb&&mongoose.connection.readyState===1)await Config.findOneAndUpdate({key:"global_config"},{$set:{maintenance:d}},{upsert:true});memoryCache.maintenance=d;res.json({success:true,maintenance:d});});
+app.get("/api/admin/maintenance",requireDatabase,async(req,res)=>{const c=await getActiveConfig();res.json({success:true,maintenance:c.maintenance});});
+app.post("/api/admin/maintenance",requireAdminAuth,requireDatabase,async(req,res)=>{const d={enabled:!!req.body.enabled,message:String(req.body.message||"App undergoing maintenance.")};if(cachedDb&&mongoose.connection.readyState===1)await Config.findOneAndUpdate({key:"global_config"},{$set:{maintenance:d}},{upsert:true});memoryCache.maintenance=d;res.json({success:true,maintenance:d});});
 
 app.get(["/","/admin"],(req,res)=>res.sendFile(path.join(__dirname,"public","admin.html")));
 
