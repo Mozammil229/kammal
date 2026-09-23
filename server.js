@@ -19,7 +19,7 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const ADMIN_SECURITY_KEY = process.env.ADMIN_KEY || "ADmin";
+const ADMIN_SECURITY_KEY = process.env.ADMIN_KEY || (process.env.NODE_ENV === "production" ? "" : "ADmin");
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 const MONGODB_URI = process.env.MONGODB_URI || "";
 const OWNER_USERNAME = (process.env.OWNER_USERNAME || "mozammil").trim().toLowerCase();
@@ -71,7 +71,18 @@ const ConfigSchema = new mongoose.Schema({
   maintenance: {
     enabled: { type: Boolean, default: false },
     message: { type: String, default: "Scheduled maintenance in progress." }
-  }
+  },
+  featureFlags: {
+    registration: { type: Boolean, default: true },
+    aiChat: { type: Boolean, default: true },
+    userChat: { type: Boolean, default: true },
+    patcher: { type: Boolean, default: true },
+    wink: { type: Boolean, default: true },
+    screenshotAllowed: { type: Boolean, default: false },
+    screenRecordingAllowed: { type: Boolean, default: false }
+  },
+  defaultCredits: { type: Number, default: 20 },
+  aiCreditCost: { type: Number, default: 0 }
 });
 
 const ConversationSchema = new mongoose.Schema({
@@ -115,6 +126,13 @@ const SessionSchema = new mongoose.Schema({
   expiresAt: { type: Date, index: true },
   createdAt: { type: Date, default: Date.now }
 });
+const AuditLogSchema = new mongoose.Schema({
+  action: { type: String, required: true, index: true },
+  username: { type: String, default: "" },
+  targetUserId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+  details: { type: String, default: "" },
+  createdAt: { type: Date, default: Date.now, index: true }
+});
 
 const User = mongoose.models.User || mongoose.model("User", UserSchema);
 const Config = mongoose.models.Config || mongoose.model("Config", ConfigSchema);
@@ -123,6 +141,7 @@ const ChatConversation = mongoose.models.ChatConversation || mongoose.model("Cha
 const Message = mongoose.models.Message || mongoose.model("Message", MessageSchema);
 const CreditTransaction = mongoose.models.CreditTransaction || mongoose.model("CreditTransaction", CreditTransactionSchema);
 const Session = mongoose.models.Session || mongoose.model("Session", SessionSchema);
+const AuditLog = mongoose.models.AuditLog || mongoose.model("AuditLog", AuditLogSchema);
 
 let cachedDb = null;
 let memoryCache = {
@@ -130,6 +149,12 @@ let memoryCache = {
   defaultPrompt: "You are Kammal App AI, an intelligent assistant.",
   currentModel: "gemini-3.1-pro-preview",
   maintenance: { enabled: false, message: "Scheduled maintenance in progress." },
+  featureFlags: {
+    registration: true, aiChat: true, userChat: true, patcher: true, wink: true,
+    screenshotAllowed: false, screenRecordingAllowed: false
+  },
+  defaultCredits: 20,
+  aiCreditCost: 0,
   users: {}
 };
 
@@ -264,6 +289,11 @@ async function creditLog(user, type, amount, reason, adminId = null) {
     await CreditTransaction.create({ userId: user._id, type, amount, balanceAfter: isOwner(user) ? OWNER_CREDITS : user.credits, reason, adminId });
   }
 }
+async function audit(action, username = "", targetUserId = null, details = "") {
+  if (cachedDb && mongoose.connection.readyState === 1) {
+    try { await AuditLog.create({ action, username, targetUserId, details }); } catch {}
+  }
+}
 async function grantPlan(user, planType, durationDays = null) {
   const now = new Date();
   user.planType = planType;
@@ -281,6 +311,10 @@ async function grantPlan(user, planType, durationDays = null) {
 // ---------- AUTH ----------
 app.post("/api/auth/register", async (req, res) => {
   try {
+    const cfg = await getActiveConfig();
+    if (cfg.featureFlags && cfg.featureFlags.registration === false) {
+      return res.status(403).json({ success:false, error:"Registration is currently disabled." });
+    }
     const username = String(req.body.username || "").trim();
     const password = String(req.body.password || "");
     const email = String(req.body.email || "").trim();
@@ -290,12 +324,12 @@ app.post("/api/auth/register", async (req, res) => {
     if (password.length < 6) return res.status(400).json({ success:false, error:"Password must be at least 6 characters." });
     if (cachedDb && mongoose.connection.readyState === 1) {
       if (await User.findOne({ username })) return res.status(409).json({ success:false, error:"Username already exists." });
-      const user = await User.create({ username, email, deviceId, passwordHash: hashPassword(password), credits: 20 });
+      const user = await User.create({ username, email, deviceId, passwordHash: hashPassword(password), credits: Number(cfg.defaultCredits ?? 20) });
       await normalizeOwner(user);
       return issueToken(res, user);
     }
     if (memoryCache.users[username]) return res.status(409).json({ success:false, error:"Username already exists." });
-    const user = { _id: crypto.randomUUID(), username, email, deviceId, passwordHash: hashPassword(password), credits:20, isPro:false, status:"active", customPrompt:"", role:"user", planType:"free", planStatus:"inactive", isLifetime:false, createdAt:new Date() };
+    const user = { _id: crypto.randomUUID(), username, email, deviceId, passwordHash: hashPassword(password), credits:Number(cfg.defaultCredits ?? 20), isPro:false, status:"active", customPrompt:"", role:"user", planType:"free", planStatus:"inactive", isLifetime:false, createdAt:new Date() };
     memoryCache.users[username] = user;
     return res.json({ success:true, token: makeToken(), user:safeUser(user) });
   } catch (e) { res.status(500).json({ success:false, error:"Registration failed." }); }
@@ -416,6 +450,8 @@ app.get("/api/chats",requireUser,async(req,res)=>{
 });
 
 app.post("/api/chats",requireUser,async(req,res)=>{
+  const cfg=await getActiveConfig();
+  if(cfg.featureFlags && cfg.featureFlags.userChat===false) return res.status(403).json({success:false,error:"User chat is disabled."});
   if(!(cachedDb&&mongoose.connection.readyState===1))return res.status(503).json({success:false,error:"Chat database unavailable."});
   const target=await User.findById(req.body.userId);
   if(!target||target.status==="banned")return res.status(404).json({success:false,error:"User not available."});
@@ -437,6 +473,8 @@ app.get("/api/chats/:conversationId/messages",requireUser,async(req,res)=>{
 });
 
 app.post("/api/chats/:conversationId/messages",requireUser,async(req,res)=>{
+  const cfg=await getActiveConfig();
+  if(cfg.featureFlags && cfg.featureFlags.userChat===false) return res.status(403).json({success:false,error:"User chat is disabled."});
   if(!(cachedDb&&mongoose.connection.readyState===1))return res.status(503).json({success:false,error:"Chat database unavailable."});
   const message=String(req.body.message||"").trim();
   if(!message)return res.status(400).json({success:false,error:"Message required"});
@@ -474,6 +512,7 @@ app.post("/api/admin/chat/:userId/message",requireAdminAuth,async(req,res)=>{
 // Legacy AI endpoint preserved; authenticated clients should use /api/auth/me and token.
 app.post("/api/chat",async(req,res)=>{
   const conf=await getActiveConfig();
+  if(conf.featureFlags && conf.featureFlags.aiChat===false) return res.status(403).json({success:false,error:"AI chat is disabled by administrator."});
   if(conf.maintenance?.enabled)return res.status(503).json({success:false,error:conf.maintenance.message||"Maintenance"});
   const message=String(req.body.message||"").trim();if(!message)return res.status(400).json({success:false,error:"Message required"});
   let user=await authFromToken(req);
@@ -491,8 +530,74 @@ app.post("/api/chat",async(req,res)=>{
   }catch(e){res.status(500).json({success:false,error:e.message});}
 });
 
-app.get("/api/admin/maintenance",async(req,res)=>{const c=await getActiveConfig();res.json({success:true,maintenance:c.maintenance});});
-app.post("/api/admin/maintenance",requireAdminAuth,async(req,res)=>{const d={enabled:!!req.body.enabled,message:String(req.body.message||"App undergoing maintenance.")};if(cachedDb&&mongoose.connection.readyState===1)await Config.findOneAndUpdate({key:"global_config"},{$set:{maintenance:d}},{upsert:true});memoryCache.maintenance=d;res.json({success:true,maintenance:d});});
+app.get("/api/admin/maintenance",requireAdminAuth,async(req,res)=>{const c=await getActiveConfig();res.json({success:true,maintenance:c.maintenance});});
+app.post("/api/admin/maintenance",requireAdminAuth,async(req,res)=>{const d={enabled:!!req.body.enabled,message:String(req.body.message||"App undergoing maintenance.")};if(cachedDb&&mongoose.connection.readyState===1)await Config.findOneAndUpdate({key:"global_config"},{$set:{maintenance:d}},{upsert:true});memoryCache.maintenance=d;await audit(d.enabled?"MAINTENANCE_ON":"MAINTENANCE_OFF","","",d.message);res.json({success:true,maintenance:d});});
+
+/* ---------- ADMIN CONTROL CENTER ---------- */
+function publicConfig(c){
+  return {
+    maintenance:c.maintenance||{enabled:false,message:""},
+    featureFlags:c.featureFlags||memoryCache.featureFlags,
+    defaultCredits:Number(c.defaultCredits??20),
+    aiCreditCost:Number(c.aiCreditCost??0),
+    currentModel:c.currentModel||"gemini-3.1-pro-preview"
+  };
+}
+app.get("/api/app-config",async(req,res)=>{
+  const c=await getActiveConfig();
+  res.json({success:true,config:publicConfig(c)});
+});
+app.get("/api/admin/config",requireAdminAuth,async(req,res)=>{
+  const c=await getActiveConfig(); res.json({success:true,config:publicConfig(c)});
+});
+app.post("/api/admin/config",requireAdminAuth,async(req,res)=>{
+  const incoming=req.body||{};
+  const flags={...memoryCache.featureFlags,...(incoming.featureFlags||{})};
+  const cleanFlags={};
+  for(const k of ["registration","aiChat","userChat","patcher","wink","screenshotAllowed","screenRecordingAllowed"]) cleanFlags[k]=!!flags[k];
+  const update={
+    featureFlags:cleanFlags,
+    defaultCredits:Math.max(0,Math.min(100000000,parseInt(incoming.defaultCredits,10)||0)),
+    aiCreditCost:Math.max(0,Math.min(1000,parseInt(incoming.aiCreditCost,10)||0))
+  };
+  if(cachedDb&&mongoose.connection.readyState===1) await Config.findOneAndUpdate({key:"global_config"},{$set:update},{upsert:true});
+  Object.assign(memoryCache,update);
+  await audit("CONFIG_UPDATE","","",JSON.stringify(update));
+  res.json({success:true,config:{...publicConfig(await getActiveConfig()),...update}});
+});
+app.get("/api/admin/stats",requireAdminAuth,async(req,res)=>{
+  if(!(cachedDb&&mongoose.connection.readyState===1)) return res.json({success:true,stats:{users:0,active:0,banned:0,pro:0,chats:0}});
+  const [users,active,banned,pro,chats]=await Promise.all([
+    User.countDocuments(),User.countDocuments({status:"active"}),User.countDocuments({status:"banned"}),
+    User.countDocuments({isPro:true}),ChatConversation.countDocuments()
+  ]);
+  res.json({success:true,stats:{users,active,banned,pro,chats}});
+});
+app.get("/api/admin/audit",requireAdminAuth,async(req,res)=>{
+  if(!(cachedDb&&mongoose.connection.readyState===1)) return res.json({success:true,logs:[]});
+  const logs=await AuditLog.find().sort({createdAt:-1}).limit(200).lean();
+  res.json({success:true,logs});
+});
+app.post("/api/admin/remove-credits",requireAdminAuth,async(req,res)=>{
+  const u=await getUserByUsername(req.body.username); if(!u)return res.status(404).json({success:false,error:"User not found"});
+  if(isOwner(u))return res.status(403).json({success:false,error:"Owner credits are protected"});
+  const qty=Math.max(0,parseInt(req.body.amount,10)||0);
+  u.credits=Math.max(0,u.credits-qty); if(cachedDb&&mongoose.connection.readyState===1)await u.save();
+  await creditLog(u,"ADMIN_REMOVE",-qty,"Admin credit deduction");
+  await audit("CREDIT_REMOVE",u.username,u._id,String(qty));
+  res.json({success:true,credits:u.credits});
+});
+app.get("/api/admin/chat/:userId/messages",requireAdminAuth,async(req,res)=>{
+  if(!(cachedDb&&mongoose.connection.readyState===1))return res.json({success:true,messages:[]});
+  const target=await User.findById(req.params.userId); if(!target)return res.status(404).json({success:false,error:"User not found"});
+  const owner=OWNER_USER_ID?await User.findById(OWNER_USER_ID):await User.findOne({$or:[{username:OWNER_USERNAME},{role:"owner"}]});
+  if(!owner)return res.status(404).json({success:false,error:"Owner account not found"});
+  const c=await ChatConversation.findOne({participantKey:pairKey(owner._id,target._id)});
+  if(!c)return res.json({success:true,messages:[]});
+  const messages=await Message.find({conversationId:c._id,deletedAt:null}).sort({createdAt:1}).limit(500).lean();
+  res.json({success:true,messages:messages.map(m=>({id:String(m._id),senderId:String(m.senderId),message:m.message,createdAt:m.createdAt,readAt:m.readAt}))});
+});
+
 
 app.get(["/","/admin"],(req,res)=>res.sendFile(path.join(__dirname,"public","admin.html")));
 
