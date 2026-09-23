@@ -19,7 +19,8 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const ADMIN_SECURITY_KEY = String(process.env.ADMIN_KEY || "").trim();
+const ADMIN_SECURITY_KEY =
+  String(process.env.ADMIN_KEY || "ADmin").trim();
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 const MONGODB_URI = process.env.MONGODB_URI || "";
 const OWNER_USERNAME = (process.env.OWNER_USERNAME || "mozammil").trim().toLowerCase();
