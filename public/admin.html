@@ -3,116 +3,157 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Kammal App — Command Core</title>
+<title>Kammal App — Admin Control Center</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
 body{font-family:Inter,system-ui,sans-serif;background:#030712;color:#f8fafc}
-.glass{background:rgba(15,23,42,.78);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.08)}
-input,textarea{user-select:text} .scroll::-webkit-scrollbar{width:4px}.scroll::-webkit-scrollbar-thumb{background:#334155;border-radius:8px}
+.glass{background:rgba(15,23,42,.82);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.08)}
+input,textarea,select{outline:none} .scroll::-webkit-scrollbar{width:4px}.scroll::-webkit-scrollbar-thumb{background:#334155;border-radius:8px}
+.tab.active{background:#0891b2;color:#001018}.danger{color:#fda4af}
 </style>
 </head>
 <body class="min-h-screen">
 <div id="lock" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950 p-4">
  <div class="glass rounded-3xl p-6 w-full max-w-sm space-y-4 text-center">
   <div class="text-4xl">🛡️</div><h1 class="text-xl font-black">Kammal Command Core</h1>
-  <input id="key" type="password" placeholder="Admin security key" class="w-full bg-slate-950 border border-slate-700 rounded-2xl p-3">
+  <p class="text-xs text-slate-400">Admin Control Center</p>
+  <input id="key" type="password" autocomplete="current-password" placeholder="Admin security key" class="w-full bg-slate-950 border border-slate-700 rounded-2xl p-3">
   <button onclick="unlock()" class="w-full py-3 rounded-2xl bg-cyan-500 text-slate-950 font-black">Unlock</button>
   <p id="err" class="text-xs text-rose-400"></p>
  </div>
 </div>
 
-<main id="app" class="hidden max-w-3xl mx-auto p-4 pb-16">
+<main id="app" class="hidden max-w-5xl mx-auto p-4 pb-16">
 <header class="glass sticky top-2 z-30 rounded-2xl p-4 mb-4 flex justify-between items-center">
- <div><b>Kammal App</b><div class="text-[10px] text-emerald-400">ADMIN • ONLINE</div></div>
- <button onclick="location.reload()" class="text-xs px-3 py-2 rounded-xl bg-slate-800">Refresh</button>
+ <div><b>Kammal App</b><div class="text-[10px] text-emerald-400">ADMIN CONTROL CENTER • ONLINE</div></div>
+ <div class="flex gap-2"><button onclick="loadAll()" class="text-xs px-3 py-2 rounded-xl bg-slate-800">Refresh</button><button onclick="logout()" class="text-xs px-3 py-2 rounded-xl bg-rose-950 text-rose-300">Lock</button></div>
 </header>
 
-<nav class="grid grid-cols-4 gap-1 bg-slate-900 p-1 rounded-2xl mb-4">
- <button onclick="tab('ai')" class="tab py-2 rounded-xl text-xs">🧠 AI</button>
- <button onclick="tab('users')" class="tab py-2 rounded-xl text-xs">👥 Users</button>
- <button onclick="tab('chat')" class="tab py-2 rounded-xl text-xs">💬 Chats</button>
- <button onclick="tab('system')" class="tab py-2 rounded-xl text-xs">⚙️ System</button>
+<nav id="nav" class="grid grid-cols-3 md:grid-cols-7 gap-1 bg-slate-900 p-1 rounded-2xl mb-4">
+ <button onclick="tab('dashboard',this)" class="tab active py-2 rounded-xl text-xs">📊 Dashboard</button>
+ <button onclick="tab('ai',this)" class="tab py-2 rounded-xl text-xs">🧠 AI</button>
+ <button onclick="tab('users',this)" class="tab py-2 rounded-xl text-xs">👥 Users</button>
+ <button onclick="tab('chat',this)" class="tab py-2 rounded-xl text-xs">💬 Chats</button>
+ <button onclick="tab('system',this)" class="tab py-2 rounded-xl text-xs">⚙️ App</button>
+ <button onclick="tab('security',this)" class="tab py-2 rounded-xl text-xs">🔐 Security</button>
+ <button onclick="tab('audit',this)" class="tab py-2 rounded-xl text-xs">📜 Audit</button>
 </nav>
 
-<section id="ai" class="space-y-4">
+<section id="dashboard" class="space-y-4">
+ <div class="grid grid-cols-2 md:grid-cols-5 gap-2" id="stats"></div>
+ <div class="glass rounded-2xl p-4"><h2 class="font-bold mb-2">Control Center</h2><p class="text-sm text-slate-400">Use this panel to control AI, users, plans, credits, chat, maintenance and app security policy.</p></div>
+</section>
+
+<section id="ai" class="hidden space-y-4">
  <div class="glass rounded-2xl p-4 space-y-3">
   <h2 class="font-bold">Global AI Prompt</h2>
-  <textarea id="globalPrompt" rows="7" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm"></textarea>
+  <textarea id="globalPrompt" rows="8" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm"></textarea>
   <button onclick="saveGlobal()" class="w-full py-3 rounded-xl bg-cyan-500 text-slate-950 font-bold">Save Global Prompt</button>
  </div>
  <div class="glass rounded-2xl p-4 space-y-3">
-  <h2 class="font-bold">Custom User Prompt</h2>
-  <div class="flex gap-2"><input id="promptUser" placeholder="username" class="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3"><button onclick="loadPrompt()" class="px-4 rounded-xl bg-purple-600">Load</button></div>
-  <textarea id="customPrompt" rows="7" placeholder="This prompt applies only to this user..." class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm"></textarea>
+  <h2 class="font-bold">Per-user Premium / Custom Prompt</h2>
+  <div class="flex gap-2"><input id="promptUser" placeholder="Exact username" class="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3"><button onclick="loadPrompt()" class="px-4 rounded-xl bg-purple-600">Load</button></div>
+  <textarea id="customPrompt" rows="8" placeholder="Only this user receives this prompt..." class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm"></textarea>
   <div class="grid grid-cols-2 gap-2"><button onclick="savePrompt()" class="py-3 rounded-xl bg-purple-600 font-bold">Save / Re-edit</button><button onclick="clearPrompt()" class="py-3 rounded-xl bg-slate-800">Use Global</button></div>
+ </div>
+ <div class="glass rounded-2xl p-4 space-y-3">
+  <h2 class="font-bold">AI Model</h2>
+  <div class="flex gap-2"><input id="model" class="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3" placeholder="gemini-3.1-pro-preview"><button onclick="saveModel()" class="px-4 rounded-xl bg-cyan-600">Save</button></div>
+  <input id="testMessage" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3" placeholder="Test message">
+  <button onclick="testPrompt()" class="w-full py-3 rounded-xl bg-slate-800">Test Current Prompt</button>
+  <pre id="testResult" class="whitespace-pre-wrap text-xs text-slate-400"></pre>
  </div>
 </section>
 
 <section id="users" class="hidden space-y-4">
- <input id="search" oninput="loadUsers()" placeholder="Search username..." class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3">
+ <input id="search" oninput="loadUsers()" placeholder="Search username or device..." class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3">
  <div id="usersList" class="space-y-2"></div>
 </section>
 
 <section id="chat" class="hidden space-y-3">
  <div class="glass rounded-2xl p-4">
-  <h2 class="font-bold mb-3">👑 Owner / Admin Inbox</h2>
-  <input id="chatSearch" oninput="loadChatUsers()" placeholder="Search user to message..." class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 mb-3">
+  <h2 class="font-bold mb-3">👑 Owner Inbox</h2>
+  <input id="chatSearch" oninput="loadChatUsers()" placeholder="Search user..." class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 mb-3">
   <div id="chatUsers" class="space-y-2"></div>
  </div>
  <div id="chatBox" class="hidden glass rounded-2xl p-4">
   <div class="flex justify-between"><b id="chatTitle">Owner Chat</b><button onclick="closeChat()">✕</button></div>
-  <div id="messages" class="scroll h-72 overflow-y-auto space-y-2 py-3"></div>
-  <div class="flex gap-2"><input id="msg" maxlength="4000" class="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3" placeholder="Type a message..."><button onclick="sendOwnerMessage()" class="px-4 rounded-xl bg-cyan-500 text-slate-950 font-bold">Send</button></div>
+  <div id="messages" class="scroll h-80 overflow-y-auto space-y-2 py-3"></div>
+  <div class="flex gap-2"><input id="msg" maxlength="4000" class="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3" placeholder="Text only..."><button onclick="sendOwnerMessage()" class="px-4 rounded-xl bg-cyan-500 text-slate-950 font-bold">Send</button></div>
  </div>
 </section>
 
 <section id="system" class="hidden space-y-4">
  <div class="glass rounded-2xl p-4 space-y-3">
-  <h2 class="font-bold">Plans & Credits</h2>
-  <p class="text-xs text-slate-400">Owner is protected at 9,999,999 credits and Lifetime.</p>
-  <div class="text-sm bg-slate-950 rounded-xl p-3">Supported: Free • Monthly • Yearly • Lifetime • Custom</div>
+  <h2 class="font-bold">App Feature Controls</h2>
+  <div id="flags" class="grid md:grid-cols-2 gap-2"></div>
+  <div class="grid md:grid-cols-2 gap-2">
+   <label class="text-xs text-slate-400">Default credits for new users<input id="defaultCredits" type="number" min="0" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white"></label>
+   <label class="text-xs text-slate-400">AI credit cost (0 = no automatic deduction)<input id="aiCreditCost" type="number" min="0" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white"></label>
+  </div>
+  <button onclick="saveConfig()" class="w-full py-3 rounded-xl bg-cyan-500 text-slate-950 font-bold">Save App Controls</button>
  </div>
  <div class="glass rounded-2xl p-4 space-y-3">
   <h2 class="font-bold">Maintenance</h2>
-  <textarea id="maint" rows="3" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3"></textarea>
+  <textarea id="maint" rows="3" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3" placeholder="Maintenance message"></textarea>
   <div class="grid grid-cols-2 gap-2"><button onclick="maintenance(true)" class="py-3 rounded-xl bg-rose-600">Freeze</button><button onclick="maintenance(false)" class="py-3 rounded-xl bg-emerald-600">Resume</button></div>
  </div>
+</section>
+
+<section id="security" class="hidden space-y-4">
+ <div class="glass rounded-2xl p-4 space-y-3">
+  <h2 class="font-bold">Security / Privacy Policy</h2>
+  <p class="text-xs text-slate-400">These settings are sent to the Android app through <code>/api/app-config</code>. The Android app must enforce screenshot/recording protection with FLAG_SECURE.</p>
+  <div class="bg-slate-950 rounded-xl p-3 text-sm">📸 Screenshot: <b id="screenState"></b><br>🎥 Recording: <b id="recordState"></b></div>
+  <p class="text-xs text-amber-300">To block screenshots and screen recording, set both policies to OFF and make the Android client apply FLAG_SECURE. Backend alone cannot physically stop Android screenshots.</p>
+ </div>
+</section>
+
+<section id="audit" class="hidden space-y-3">
+ <div class="flex justify-between"><h2 class="font-bold">Admin Audit Log</h2><button onclick="loadAudit()" class="text-xs px-3 py-2 rounded-xl bg-slate-800">Refresh</button></div>
+ <div id="auditList" class="space-y-2"></div>
 </section>
 </main>
 
 <script>
-let key=localStorage.getItem("kammal_admin_key")||"", selectedUser=null;
+let key=localStorage.getItem("kammal_admin_key")||"",selectedUser=null,selectedName="";
 const $=id=>document.getElementById(id);
-function api(url,opt={}){opt.headers={...(opt.headers||{}),"x-admin-key":key};return fetch(url,opt).then(async r=>{const d=await r.json();if(!r.ok)throw Error(d.error||"Request failed");return d})}
-async function unlock(){try{const d=await api("/api/admin/system-prompt");key=$("key").value.trim();localStorage.setItem("kammal_admin_key",key);$("lock").classList.add("hidden");$("app").classList.remove("hidden");loadAll()}catch(e){$("err").textContent="Invalid admin key"}} 
-function tab(id){["ai","users","chat","system"].forEach(x=>$(x).classList.toggle("hidden",x!==id));if(id==="users")loadUsers();if(id==="chat")loadChatUsers();if(id==="system")loadMaintenance()}
-async function loadAll(){try{const d=await api("/api/admin/system-prompt");$("globalPrompt").value=d.systemPrompt||""}catch(e){}loadUsers()}
-async function saveGlobal(){await api("/api/admin/system-prompt",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({systemPrompt:$("globalPrompt").value})});alert("Global prompt saved")}
-async function loadPrompt(){const u=$("promptUser").value.trim();if(!u)return;const d=await api("/api/admin/user-prompt/"+encodeURIComponent(u));$("customPrompt").value=d.customPrompt||""}
-async function savePrompt(){const u=$("promptUser").value.trim();await api("/api/admin/user-prompt",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:u,customPrompt:$("customPrompt").value})});alert("Custom prompt saved")}
+function api(url,opt={}){opt.headers={...(opt.headers||{}),"x-admin-key":key};return fetch(url,opt).then(async r=>{let d={};try{d=await r.json()}catch{}if(!r.ok)throw Error(d.error||"Request failed");return d})}
+async function unlock(){
+ key=$("key").value.trim();
+ if(!key){$("err").textContent="Enter admin key";return}
+ try{await api("/api/admin/system-prompt");localStorage.setItem("kammal_admin_key",key);$("lock").classList.add("hidden");$("app").classList.remove("hidden");await loadAll()}
+ catch(e){$("err").textContent="Invalid admin key"}
+}
+function logout(){localStorage.removeItem("kammal_admin_key");key="";location.reload()}
+function tab(id,btn){["dashboard","ai","users","chat","system","security","audit"].forEach(x=>$(x).classList.toggle("hidden",x!==id));document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));if(btn)btn.classList.add("active");if(id==="users")loadUsers();if(id==="chat")loadChatUsers();if(id==="system")loadConfig();if(id==="security")loadConfig();if(id==="audit")loadAudit()}
+async function loadAll(){await Promise.all([loadStats(),loadAI(),loadConfig(),loadUsers()])}
+async function loadStats(){try{const d=await api("/api/admin/stats");$("stats").innerHTML=Object.entries(d.stats||{}).map(([k,v])=>`<div class="glass rounded-2xl p-4"><div class="text-xs text-slate-500">${esc(k)}</div><b class="text-xl">${v}</b></div>`).join("")}catch{}}
+async function loadAI(){try{const d=await api("/api/admin/system-prompt");$("globalPrompt").value=d.systemPrompt||"";const m=await api("/api/admin/model");$("model").value=m.currentModel||""}catch{}}
+async function saveGlobal(){try{await api("/api/admin/system-prompt",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({systemPrompt:$("globalPrompt").value})});alert("Global prompt saved")}catch(e){alert(e.message)}}
+async function loadPrompt(){const u=$("promptUser").value.trim();if(!u)return;try{const d=await api("/api/admin/user-prompt/"+encodeURIComponent(u));$("customPrompt").value=d.customPrompt||""}catch(e){alert(e.message)}}
+async function savePrompt(){const u=$("promptUser").value.trim();if(!u)return alert("Enter username");try{await api("/api/admin/user-prompt",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:u,customPrompt:$("customPrompt").value})});alert("Custom prompt saved")}catch(e){alert(e.message)}}
 async function clearPrompt(){$("customPrompt").value="";await savePrompt()}
-async function loadUsers(){try{const d=await api("/api/admin/users?search="+encodeURIComponent($("search").value||""));$("usersList").innerHTML=(d.users||[]).map(u=>`
-<div class="glass rounded-2xl p-4">
- <div class="flex justify-between items-center"><div><b>${esc(u.username)}</b>${u.owner?' <span class="text-amber-300 font-bold">👑 Owner</span>':''} ${u.isPro?'<span class="text-amber-300 text-xs">PRO</span>':''}</div><b class="text-cyan-300">${u.credits}</b></div>
- <div class="text-xs text-slate-400 mt-2">Plan: ${u.planType} • ${u.planStatus}</div>
- <div class="flex flex-wrap gap-2 mt-3">
- <button class="px-3 py-2 rounded-lg bg-cyan-500/20 text-cyan-300 text-xs" onclick="give('${encodeURIComponent(u.realUsernameHidden?'':u.username)}')">+20</button>
- <button class="px-3 py-2 rounded-lg bg-purple-500/20 text-purple-300 text-xs" onclick="plan('${encodeURIComponent(u.realUsernameHidden?'':u.username)}','monthly')">Monthly</button>
- <button class="px-3 py-2 rounded-lg bg-purple-500/20 text-purple-300 text-xs" onclick="plan('${encodeURIComponent(u.realUsernameHidden?'':u.username)}','yearly')">Yearly</button>
- <button class="px-3 py-2 rounded-lg bg-amber-500/20 text-amber-300 text-xs" onclick="plan('${encodeURIComponent(u.realUsernameHidden?'':u.username)}','lifetime')">Lifetime</button>
- <button class="px-3 py-2 rounded-lg bg-slate-800 text-xs" onclick="openUserPrompt('${encodeURIComponent(u.realUsernameHidden?'':u.username)}')">Prompt</button>
- </div>
-</div>`).join("")||"<p class='text-slate-500'>No users.</p>"}catch(e){$("usersList").innerHTML="<p class='text-rose-400'>"+esc(e.message)+"</p>"}}
-async function give(u){if(!u)return alert("Owner is protected.");await api("/api/admin/add-credits",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:decodeURIComponent(u),amount:20})});loadUsers()}
-async function plan(u,type){if(!u)return alert("Owner is already Lifetime.");await api("/api/admin/set-plan",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:decodeURIComponent(u),planType:type})});loadUsers()}
-function openUserPrompt(u){if(!u)return;tab("ai");$("promptUser").value=decodeURIComponent(u);loadPrompt()}
-async function loadChatUsers(){try{const d=await api("/api/admin/chat/users?search="+encodeURIComponent($("chatSearch").value||""));$("chatUsers").innerHTML=(d.users||[]).map(u=>`<button onclick="openChat('${u.id}','${esc(u.username)}')" class="w-full text-left glass rounded-xl p-3"><b>${u.owner?'👑 Owner':esc(u.username)}</b><span class="text-xs text-slate-500 ml-2">${u.planType}</span></button>`).join("")}catch(e){}}
-async function openChat(id,name){selectedUser=id;$("chatBox").classList.remove("hidden");$("chatTitle").textContent="👑 Owner → "+name;$("messages").innerHTML="<div class='text-slate-500 text-sm'>Use Send to start this conversation.</div>"}
-async function sendOwnerMessage(){if(!selectedUser)return;const text=$("msg").value.trim();if(!text)return;await api("/api/admin/chat/"+selectedUser+"/message",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:text})});$("messages").insertAdjacentHTML("beforeend",`<div class="ml-auto max-w-[85%] bg-cyan-600/20 border border-cyan-500/30 rounded-2xl p-3 text-sm"><b>Owner</b><div>${esc(text)}</div></div>`);$("msg").value=""}
+async function saveModel(){try{await api("/api/admin/model",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:$("model").value})});alert("Model updated")}catch(e){alert(e.message)}}
+async function testPrompt(){try{const d=await api("/api/admin/test-prompt",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt:$("globalPrompt").value,testMessage:$("testMessage").value||"Hello"})});$("testResult").textContent=d.reply||""}catch(e){$("testResult").textContent=e.message}}
+async function loadUsers(){try{const d=await api("/api/admin/users?search="+encodeURIComponent($("search").value||""));$("usersList").innerHTML=(d.users||[]).map(u=>{const n=u.realUsernameHidden?"":u.username;return `<div class="glass rounded-2xl p-4"><div class="flex justify-between"><div><b>${esc(u.username)}</b>${u.owner?' <span class="text-amber-300 font-bold">👑 Owner</span>':''} ${u.isPro?'<span class="text-amber-300 text-xs">PRO</span>':''}</div><b class="text-cyan-300">${u.credits}</b></div><div class="text-xs text-slate-400 mt-2">Plan: ${u.planType} • ${u.planStatus} • Status: ${u.status}</div>${n?`<div class="grid grid-cols-2 md:grid-cols-5 gap-2 mt-3"><button onclick="credit('${js(n)}',20)" class="py-2 rounded-lg bg-emerald-500/20 text-emerald-300 text-xs">+20</button><button onclick="credit('${js(n)}',-20)" class="py-2 rounded-lg bg-rose-500/20 text-rose-300 text-xs">−20</button><button onclick="setCredits('${js(n)}')" class="py-2 rounded-lg bg-cyan-500/20 text-cyan-300 text-xs">Set coins</button><button onclick="plan('${js(n)}','lifetime')" class="py-2 rounded-lg bg-amber-500/20 text-amber-300 text-xs">Lifetime</button><button onclick="ban('${js(n)}',${u.status!=="banned"})" class="py-2 rounded-lg bg-slate-800 text-xs">${u.status==="banned"?"Unban":"Ban"}</button></div><div class="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2"><button onclick="plan('${js(n)}','monthly')" class="py-2 rounded-lg bg-purple-500/20 text-purple-300 text-xs">Monthly</button><button onclick="plan('${js(n)}','yearly')" class="py-2 rounded-lg bg-purple-500/20 text-purple-300 text-xs">Yearly</button><button onclick="resetDevice('${js(n)}')" class="py-2 rounded-lg bg-slate-800 text-xs">Reset Device</button><button onclick="openPrompt('${js(n)}')" class="py-2 rounded-lg bg-slate-800 text-xs">Premium Prompt</button></div>`:""}</div>`}).join("")||"<p class='text-slate-500'>No users.</p>"}catch(e){$("usersList").innerHTML="<p class='text-rose-400'>"+esc(e.message)+"</p>"}}
+async function credit(u,a){try{const ep=a>=0?"/api/admin/add-credits":"/api/admin/remove-credits";await api(ep,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:u,amount:Math.abs(a)})});loadUsers()}catch(e){alert(e.message)}}
+async function setCredits(u){const v=prompt("New credit balance:");if(v===null)return;try{await api("/api/admin/set-credits",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:u,credits:v})});loadUsers()}catch(e){alert(e.message)}}
+async function plan(u,type){try{await api("/api/admin/set-plan",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:u,planType:type})});loadUsers()}catch(e){alert(e.message)}}
+async function ban(u,on){try{await api("/api/admin/"+(on?"ban":"unban"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:u})});loadUsers()}catch(e){alert(e.message)}}
+async function resetDevice(u){try{await api("/api/admin/reset-device",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:u})});alert("Device lock reset")}catch(e){alert(e.message)}}
+function openPrompt(u){tab("ai");$("promptUser").value=u;loadPrompt()}
+async function loadChatUsers(){try{const d=await api("/api/admin/chat/users?search="+encodeURIComponent($("chatSearch").value||""));$("chatUsers").innerHTML=(d.users||[]).map(u=>`<button onclick="openChat('${u.id}','${js(u.owner?'Owner':u.username)}')" class="w-full text-left glass rounded-xl p-3"><div class="flex justify-between"><b>${u.owner?'👑 Owner':esc(u.username)}</b><span class="text-xs text-slate-400">${esc(u.planType||'free')} ${u.unreadCount?'• '+u.unreadCount+' unread':''}</span></div><div class="text-xs text-slate-500 truncate">${esc(u.lastMessage||'')}</div></button>`).join("")||"<p class='text-slate-500'>No users.</p>"}catch(e){$("chatUsers").innerHTML=esc(e.message)}}
+async function openChat(id,name){selectedUser=id;selectedName=name;$("chatBox").classList.remove("hidden");$("chatTitle").textContent="👑 Owner → "+name;try{const d=await api("/api/admin/chat/"+id+"/messages");$("messages").innerHTML=(d.messages||[]).map(m=>`<div class="${String(m.senderId)===String(id)?'mr-auto':'ml-auto'} max-w-[85%] bg-slate-800 rounded-2xl p-3 text-sm">${esc(m.message)}<div class="text-[9px] text-slate-500 mt-1">${new Date(m.createdAt).toLocaleString()}</div></div>`).join("")||"<div class='text-slate-500 text-sm'>No messages yet.</div>";$("messages").scrollTop=$("messages").scrollHeight}catch(e){$("messages").textContent=e.message}}
+async function sendOwnerMessage(){if(!selectedUser)return;const text=$("msg").value.trim();if(!text)return;try{await api("/api/admin/chat/"+selectedUser+"/message",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:text})});$("msg").value="";await openChat(selectedUser,selectedName)}catch(e){alert(e.message)}}
 function closeChat(){$("chatBox").classList.add("hidden");selectedUser=null}
-async function loadMaintenance(){try{const d=await api("/api/admin/maintenance");$("maint").value=d.maintenance?.message||""}catch(e){}}
-async function maintenance(enabled){await api("/api/admin/maintenance",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({enabled,message:$("maint").value})});alert(enabled?"Frozen":"Resumed")}
+async function loadConfig(){try{const d=await api("/api/admin/config");const c=d.config;const f=c.featureFlags||{};const defs=[["registration","New registration"],["aiChat","AI chatbot"],["userChat","User-to-user chat"],["patcher","AI Patcher"],["wink","Wink"],["screenshotAllowed","Allow screenshots"],["screenRecordingAllowed","Allow screen recording"]];$("flags").innerHTML=defs.map(([k,l])=>`<label class="flex items-center gap-3 glass rounded-xl p-3 text-sm"><input type="checkbox" data-flag="${k}" ${f[k]?'checked':''}>${l}</label>`).join("");$("defaultCredits").value=c.defaultCredits??20;$("aiCreditCost").value=c.aiCreditCost??0;$("maint").value=c.maintenance?.message||"";$("screenState").textContent=f.screenshotAllowed?"ALLOWED":"BLOCKED";$("recordState").textContent=f.screenRecordingAllowed?"ALLOWED":"BLOCKED"}catch(e){console.log(e)}}
+async function saveConfig(){const flags={};document.querySelectorAll("[data-flag]").forEach(x=>flags[x.dataset.flag]=x.checked);try{await api("/api/admin/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({featureFlags:flags,defaultCredits:$("defaultCredits").value,aiCreditCost:$("aiCreditCost").value})});await loadConfig();alert("App controls saved")}catch(e){alert(e.message)}}
+async function maintenance(on){try{await api("/api/admin/maintenance",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({enabled:on,message:$("maint").value})});alert(on?"App frozen":"App resumed")}catch(e){alert(e.message)}}
+async function loadAudit(){try{const d=await api("/api/admin/audit");$("auditList").innerHTML=(d.logs||[]).map(x=>`<div class="glass rounded-xl p-3"><b class="text-cyan-300">${esc(x.action)}</b><div class="text-xs text-slate-400">${esc(x.username||'')} • ${new Date(x.createdAt).toLocaleString()}</div><div class="text-xs text-slate-500 break-all">${esc(x.details||'')}</div></div>`).join("")||"<p class='text-slate-500'>No logs.</p>"}catch(e){$("auditList").textContent=e.message}}
 function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+function js(s){return String(s??"").replace(/\\/g,"\\\\").replace(/'/g,"\\'").replace(/"/g,"&quot;")}
+$("key").addEventListener("keydown",e=>{if(e.key==="Enter")unlock()});
 if(key){$("key").value=key;unlock()}
 </script>
 </body>
