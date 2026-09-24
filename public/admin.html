@@ -1,150 +1,916 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Kammal App — Command Core</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<style>
-body{font-family:Inter,system-ui,sans-serif;background:#030712;color:#f8fafc}
-.glass{background:rgba(15,23,42,.78);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.08)}
-input,textarea{user-select:text} .scroll::-webkit-scrollbar{width:4px}.scroll::-webkit-scrollbar-thumb{background:#334155;border-radius:8px}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>👑 Kammal App — Master Admin & Telemetry Governance</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #030712;
+            color: #f3f4f6;
+        }
+        .glass-card {
+            background: rgba(17, 24, 39, 0.7);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.7);
+        }
+        .glass-glow {
+            box-shadow: 0 0 35px -5px rgba(56, 189, 248, 0.25);
+        }
+        .gold-glow {
+            box-shadow: 0 0 35px -5px rgba(245, 158, 11, 0.3);
+        }
+        .custom-scroll::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: rgba(56, 189, 248, 0.3);
+            border-radius: 9999px;
+        }
+    </style>
 </head>
-<body class="min-h-screen">
-<div id="lock" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950 p-4">
- <div class="glass rounded-3xl p-6 w-full max-w-sm space-y-4 text-center">
-  <div class="text-4xl">🛡️</div><h1 class="text-xl font-black">Kammal Command Core</h1>
-  <input id="key" type="password" placeholder="Admin security key" class="w-full bg-slate-950 border border-slate-700 rounded-2xl p-3">
-  <button onclick="unlock()" class="w-full py-3 rounded-2xl bg-cyan-500 text-slate-950 font-black">Unlock</button>
-  <p id="err" class="text-xs text-rose-400"></p>
- </div>
-</div>
+<body class="min-h-screen relative overflow-x-hidden">
 
-<main id="app" class="hidden max-w-3xl mx-auto p-4 pb-16">
-<header class="glass sticky top-2 z-30 rounded-2xl p-4 mb-4 flex justify-between items-center">
- <div><b>Kammal App</b><div class="text-[10px] text-emerald-400">ADMIN • ONLINE</div></div>
- <button onclick="location.reload()" class="text-xs px-3 py-2 rounded-xl bg-slate-800">Refresh</button>
-</header>
+    <!-- Ambient Glow Orbs -->
+    <div class="fixed -top-40 -left-40 w-96 h-96 bg-sky-500/20 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="fixed top-1/2 -right-40 w-96 h-96 bg-amber-500/15 rounded-full blur-3xl pointer-events-none"></div>
 
-<nav class="grid grid-cols-4 gap-1 bg-slate-900 p-1 rounded-2xl mb-4">
- <button onclick="tab('ai')" class="tab py-2 rounded-xl text-xs">🧠 AI</button>
- <button onclick="tab('users')" class="tab py-2 rounded-xl text-xs">👥 Users</button>
- <button onclick="tab('chat')" class="tab py-2 rounded-xl text-xs">💬 Chats</button>
- <button onclick="tab('system')" class="tab py-2 rounded-xl text-xs">⚙️ System</button>
-</nav>
+    <!-- ============================================================== -->
+    <!-- 1. ADMIN LOGIN MODAL (adMIN / ADmin) -->
+    <!-- ============================================================== -->
+    <div id="loginOverlay" class="fixed inset-0 z-50 bg-black/85 backdrop-blur-xl flex items-center justify-center p-4">
+        <div class="glass-card p-8 rounded-3xl max-w-md w-full border border-sky-500/30 text-center relative overflow-hidden">
+            <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-3xl">
+                👑
+            </div>
+            <h2 class="text-2xl font-black text-white tracking-wide">OWNER AUTHENTICATION</h2>
+            <p class="text-xs text-gray-400 mt-1 mb-6">Kammal App Master Governance Terminal</p>
 
-<section id="ai" class="space-y-4">
- <div class="glass rounded-2xl p-4 space-y-3">
-  <h2 class="font-bold">Global AI Prompt</h2>
-  <textarea id="globalPrompt" rows="7" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm"></textarea>
-  <button onclick="saveGlobal()" class="w-full py-3 rounded-xl bg-cyan-500 text-slate-950 font-bold">Save Global Prompt</button>
- </div>
- <div class="glass rounded-2xl p-4 space-y-3">
-  <h2 class="font-bold">Custom User Prompt</h2>
-  <div class="flex gap-2"><input id="promptUser" placeholder="username" class="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3"><button onclick="loadPrompt()" class="px-4 rounded-xl bg-purple-600">Load</button></div>
-  <textarea id="customPrompt" rows="7" placeholder="This prompt applies only to this user..." class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm"></textarea>
-  <div class="grid grid-cols-2 gap-2"><button onclick="savePrompt()" class="py-3 rounded-xl bg-purple-600 font-bold">Save / Re-edit</button><button onclick="clearPrompt()" class="py-3 rounded-xl bg-slate-800">Use Global</button></div>
- </div>
-</section>
+            <form id="adminLoginForm" class="space-y-4 text-left">
+                <div>
+                    <label class="text-xs font-semibold text-gray-300 block mb-1">Admin Username</label>
+                    <input type="text" id="adminUser" required placeholder="adMIN" value="adMIN"
+                        class="w-full bg-gray-900/80 border border-gray-700 rounded-xl px-4 py-3 text-sm focus:border-sky-400 focus:outline-none text-white">
+                </div>
+                <div>
+                    <label class="text-xs font-semibold text-gray-300 block mb-1">Master Password</label>
+                    <input type="password" id="adminPass" required placeholder="ADmin" value="ADmin"
+                        class="w-full bg-gray-900/80 border border-gray-700 rounded-xl px-4 py-3 text-sm focus:border-sky-400 focus:outline-none text-white">
+                </div>
+                <button type="submit"
+                    class="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-black py-3 rounded-xl shadow-lg transition-all transform active:scale-95 flex items-center justify-center space-x-2">
+                    <i class="fa-solid fa-lock-open"></i>
+                    <span>AUTHENTICATE & UNLOCK</span>
+                </button>
+            </form>
+            <div id="loginError" class="hidden text-xs text-rose-400 mt-3 font-semibold"></div>
+        </div>
+    </div>
 
-<section id="users" class="hidden space-y-4">
- <input id="search" oninput="loadUsers()" placeholder="Search username..." class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3">
- <div id="usersList" class="space-y-2"></div>
-</section>
+    <!-- ============================================================== -->
+    <!-- 2. MASTER DASHBOARD CONTENT -->
+    <!-- ============================================================== -->
+    <div id="dashboard" class="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
 
-<section id="chat" class="hidden space-y-3">
- <div class="glass rounded-2xl p-4">
-  <h2 class="font-bold mb-3">👑 Owner / Admin Inbox</h2>
-  <input id="chatSearch" oninput="loadChatUsers()" placeholder="Search user to message..." class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 mb-3">
-  <div id="chatUsers" class="space-y-2"></div>
- </div>
- <div id="chatBox" class="hidden glass rounded-2xl p-4">
-  <div class="flex justify-between"><b id="chatTitle">Owner Chat</b><button onclick="closeChat()">✕</button></div>
-  <div id="messages" class="scroll h-72 overflow-y-auto space-y-2 py-3"></div>
-  <div class="flex gap-2"><input id="msg" maxlength="4000" class="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3" placeholder="Type a message..."><button onclick="sendOwnerMessage()" class="px-4 rounded-xl bg-cyan-500 text-slate-950 font-bold">Send</button></div>
- </div>
-</section>
+        <!-- Top Header Bar -->
+        <header class="glass-card rounded-2xl p-4 sm:p-6 flex flex-col sm:flex-row items-center justify-between gap-4 border-l-4 border-l-amber-500">
+            <div class="flex items-center space-x-4">
+                <div class="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-2xl">
+                    👑
+                </div>
+                <div>
+                    <div class="flex items-center space-x-2">
+                        <h1 class="text-xl font-black text-white tracking-wide">KAMMAL COMMAND CENTER</h1>
+                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                            LIVE RADAR (2s)
+                        </span>
+                    </div>
+                    <p class="text-xs text-gray-400">Master Governance, Live Active Users, Custom Prompts & Payments</p>
+                </div>
+            </div>
 
-<section id="system" class="hidden space-y-4">
- <div class="glass rounded-2xl p-4 space-y-3">
-  <h2 class="font-bold">Plans & Credits</h2>
-  <p class="text-xs text-slate-400">Owner is protected at 9,999,999 credits and Lifetime.</p>
-  <div class="text-sm bg-slate-950 rounded-xl p-3">Supported: Free • Monthly • Yearly • Lifetime • Custom</div>
- </div>
- <div class="glass rounded-2xl p-4 space-y-3">
-  <h2 class="font-bold">Maintenance</h2>
-  <textarea id="maint" rows="3" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3"></textarea>
-  <div class="grid grid-cols-2 gap-2"><button onclick="maintenance(true)" class="py-3 rounded-xl bg-rose-600">Freeze</button><button onclick="maintenance(false)" class="py-3 rounded-xl bg-emerald-600">Resume</button></div>
- </div>
-</section>
-</main>
+            <div class="flex items-center space-x-3 w-full sm:w-auto justify-end">
+                <div class="text-right hidden sm:block">
+                    <p class="text-[10px] text-gray-400 font-medium">AUTHENTICATED AS</p>
+                    <p class="text-xs font-bold text-amber-400">👑 Master Owner (adMIN)</p>
+                </div>
+                <button onclick="logoutAdmin()" class="bg-gray-800 hover:bg-rose-950/60 border border-gray-700 hover:border-rose-500/50 text-gray-300 hover:text-rose-300 px-3.5 py-2 rounded-xl text-xs font-semibold transition">
+                    <i class="fa-solid fa-arrow-right-from-bracket mr-1.5"></i> Sign Out
+                </button>
+            </div>
+        </header>
 
-<script>
-let key=localStorage.getItem("kammal_admin_key")||"", selectedUser=null;
-const $=id=>document.getElementById(id);
-async function api(url,opt={}){
-  const headers={...(opt.headers||{}),"x-admin-key":key};
-  const r=await fetch(url,{...opt,headers,cache:"no-store"});
-  let d={};
-  try{d=await r.json()}catch{}
-  if(!r.ok)throw Error(d.error||`Request failed (${r.status})`);
-  return d;
-}
-async function unlock(){
-  const entered=$("key").value.trim();
-  if(!entered){$("err").textContent="Enter admin key";return}
-  key=entered;
-  $("err").textContent="Checking…";
-  try{
-    await api("/api/admin/verify");
-    localStorage.setItem("kammal_admin_key",key);
-    $("lock").classList.add("hidden");
-    $("app").classList.remove("hidden");
-    $("err").textContent="";
-    await loadAll();
-  }catch(e){
-    $("err").textContent=e.message||"Invalid admin key";
-    $("lock").classList.remove("hidden");
-    $("app").classList.add("hidden");
-  }
-} 
-let usersRefreshTimer=null;
-function tab(id){
-  ["ai","users","chat","system"].forEach(x=>$(x).classList.toggle("hidden",x!==id));
-  if(usersRefreshTimer){clearInterval(usersRefreshTimer);usersRefreshTimer=null;}
-  if(id==="users"){loadUsers();usersRefreshTimer=setInterval(()=>loadUsers(),5000);}
-  if(id==="chat")loadChatUsers();
-  if(id==="system")loadMaintenance();
-}
-async function loadAll(){try{const d=await api("/api/admin/system-prompt");$("globalPrompt").value=d.systemPrompt||""}catch(e){}loadUsers()}
-async function saveGlobal(){await api("/api/admin/system-prompt",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({systemPrompt:$("globalPrompt").value})});alert("Global prompt saved")}
-async function loadPrompt(){const u=$("promptUser").value.trim();if(!u)return;const d=await api("/api/admin/user-prompt/"+encodeURIComponent(u));$("customPrompt").value=d.customPrompt||""}
-async function savePrompt(){const u=$("promptUser").value.trim();await api("/api/admin/user-prompt",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:u,customPrompt:$("customPrompt").value})});alert("Custom prompt saved")}
-async function clearPrompt(){$("customPrompt").value="";await savePrompt()}
-async function loadUsers(){try{const d=await api("/api/admin/users?search="+encodeURIComponent($("search").value||""));$("usersList").innerHTML=`<div class="text-[10px] text-emerald-400">● LIVE — MongoDB • ${d.count||0} users</div>`+(d.users||[]).map(u=>`
-<div class="glass rounded-2xl p-4">
- <div class="flex justify-between items-center"><div><b>${esc(u.username)}</b>${u.owner?' <span class="text-amber-300 font-bold">👑 Owner</span>':''} ${u.isPro?'<span class="text-amber-300 text-xs">PRO</span>':''}</div><b class="text-cyan-300">${u.credits}</b></div>
- <div class="text-xs text-slate-400 mt-2">Plan: ${u.planType} • ${u.planStatus}</div>
- <div class="flex flex-wrap gap-2 mt-3">
- <button class="px-3 py-2 rounded-lg bg-cyan-500/20 text-cyan-300 text-xs" onclick="give('${encodeURIComponent(u.realUsernameHidden?'':u.username)}')">+20</button>
- <button class="px-3 py-2 rounded-lg bg-purple-500/20 text-purple-300 text-xs" onclick="plan('${encodeURIComponent(u.realUsernameHidden?'':u.username)}','monthly')">Monthly</button>
- <button class="px-3 py-2 rounded-lg bg-purple-500/20 text-purple-300 text-xs" onclick="plan('${encodeURIComponent(u.realUsernameHidden?'':u.username)}','yearly')">Yearly</button>
- <button class="px-3 py-2 rounded-lg bg-amber-500/20 text-amber-300 text-xs" onclick="plan('${encodeURIComponent(u.realUsernameHidden?'':u.username)}','lifetime')">Lifetime</button>
- <button class="px-3 py-2 rounded-lg bg-slate-800 text-xs" onclick="openUserPrompt('${encodeURIComponent(u.realUsernameHidden?'':u.username)}')">Prompt</button>
- </div>
-</div>`).join("")||"<p class='text-slate-500'>No users.</p>"}catch(e){$("usersList").innerHTML="<p class='text-rose-400'>"+esc(e.message)+"</p>"}}
-async function give(u){if(!u)return alert("Owner is protected.");await api("/api/admin/add-credits",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:decodeURIComponent(u),amount:20})});loadUsers()}
-async function plan(u,type){if(!u)return alert("Owner is already Lifetime.");await api("/api/admin/set-plan",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:decodeURIComponent(u),planType:type})});loadUsers()}
-function openUserPrompt(u){if(!u)return;tab("ai");$("promptUser").value=decodeURIComponent(u);loadPrompt()}
-async function loadChatUsers(){try{const d=await api("/api/admin/chat/users?search="+encodeURIComponent($("chatSearch").value||""));$("chatUsers").innerHTML=(d.users||[]).map(u=>`<button onclick="openChat('${u.id}','${esc(u.username)}')" class="w-full text-left glass rounded-xl p-3"><b>${u.owner?'👑 Owner':esc(u.username)}</b><span class="text-xs text-slate-500 ml-2">${u.planType}</span></button>`).join("")}catch(e){}}
-async function openChat(id,name){selectedUser=id;$("chatBox").classList.remove("hidden");$("chatTitle").textContent="👑 Owner → "+name;$("messages").innerHTML="<div class='text-slate-500 text-sm'>Use Send to start this conversation.</div>"}
-async function sendOwnerMessage(){if(!selectedUser)return;const text=$("msg").value.trim();if(!text)return;await api("/api/admin/chat/"+selectedUser+"/message",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:text})});$("messages").insertAdjacentHTML("beforeend",`<div class="ml-auto max-w-[85%] bg-cyan-600/20 border border-cyan-500/30 rounded-2xl p-3 text-sm"><b>Owner</b><div>${esc(text)}</div></div>`);$("msg").value=""}
-function closeChat(){$("chatBox").classList.add("hidden");selectedUser=null}
-async function loadMaintenance(){try{const d=await api("/api/admin/maintenance");$("maint").value=d.maintenance?.message||""}catch(e){}}
-async function maintenance(enabled){await api("/api/admin/maintenance",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({enabled,message:$("maint").value})});alert(enabled?"Frozen":"Resumed")}
-function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
-if(key){$("key").value=key;unlock()}
-</script>
+        <!-- Live Telemetry Radar Counters -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+            <div class="glass-card p-4 rounded-2xl border-t-2 border-t-sky-400">
+                <p class="text-[11px] text-gray-400 font-semibold uppercase tracking-wider">Active Radar</p>
+                <h3 id="statActiveUsers" class="text-2xl font-black text-sky-400 mt-1 flex items-center gap-2">
+                    <span>--</span>
+                    <span class="text-xs px-2 py-0.5 rounded-full bg-sky-500/20 border border-sky-500/30 text-sky-300 font-normal">Now</span>
+                </h3>
+            </div>
+
+            <div class="glass-card p-4 rounded-2xl border-t-2 border-t-emerald-400">
+                <p class="text-[11px] text-gray-400 font-semibold uppercase tracking-wider">Total Registered</p>
+                <h3 id="statTotalUsers" class="text-2xl font-black text-emerald-400 mt-1">--</h3>
+            </div>
+
+            <div class="glass-card p-4 rounded-2xl border-t-2 border-t-amber-400">
+                <p class="text-[11px] text-gray-400 font-semibold uppercase tracking-wider">VIP Members</p>
+                <h3 id="statVipUsers" class="text-2xl font-black text-amber-400 mt-1">--</h3>
+            </div>
+
+            <div class="glass-card p-4 rounded-2xl border-t-2 border-t-rose-400">
+                <p class="text-[11px] text-gray-400 font-semibold uppercase tracking-wider">Pending Payments</p>
+                <h3 id="statPendingPayments" class="text-2xl font-black text-rose-400 mt-1">--</h3>
+            </div>
+
+            <div class="glass-card p-4 rounded-2xl border-t-2 border-t-purple-400">
+                <p class="text-[11px] text-gray-400 font-semibold uppercase tracking-wider">Videos Patched</p>
+                <h3 id="statPatches" class="text-2xl font-black text-purple-400 mt-1">--</h3>
+            </div>
+
+            <div class="glass-card p-4 rounded-2xl border-t-2 border-t-indigo-400">
+                <p class="text-[11px] text-gray-400 font-semibold uppercase tracking-wider">Atlas Database</p>
+                <h3 id="statDbStatus" class="text-xs font-bold text-emerald-300 mt-2 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                    <span>ONLINE</span>
+                </h3>
+            </div>
+        </div>
+
+        <!-- Tab Navigation -->
+        <div class="flex space-x-2 border-b border-gray-800 pb-2 overflow-x-auto custom-scroll">
+            <button onclick="switchTab('usersTab')" id="btnUsersTab" class="tab-btn px-4 py-2 rounded-xl text-xs font-bold transition bg-sky-500/20 text-sky-400 border border-sky-500/40">
+                <i class="fa-solid fa-users mr-1.5"></i> All Users & Controls
+            </button>
+            <button onclick="switchTab('broadcastTab')" id="btnBroadcastTab" class="tab-btn px-4 py-2 rounded-xl text-xs font-bold transition text-gray-400 hover:text-white">
+                <i class="fa-solid fa-crown mr-1.5 text-amber-400"></i> Owner Broadcast & Messaging
+            </button>
+            <button onclick="switchTab('paymentsTab')" id="btnPaymentsTab" class="tab-btn px-4 py-2 rounded-xl text-xs font-bold transition text-gray-400 hover:text-white">
+                <i class="fa-solid fa-money-bill-wave mr-1.5 text-emerald-400"></i> Payment Proofs (JazzCash/EasyPaisa)
+            </button>
+            <button onclick="switchTab('keysTab')" id="btnKeysTab" class="tab-btn px-4 py-2 rounded-xl text-xs font-bold transition text-gray-400 hover:text-white">
+                <i class="fa-solid fa-key mr-1.5 text-indigo-400"></i> Voucher Generator
+            </button>
+            <button onclick="switchTab('remoteTab')" id="btnRemoteTab" class="tab-btn px-4 py-2 rounded-xl text-xs font-bold transition text-gray-400 hover:text-white">
+                <i class="fa-solid fa-sliders mr-1.5 text-rose-400"></i> App Killswitch & Force Update
+            </button>
+        </div>
+
+        <!-- ============================================================== -->
+        <!-- TAB 1: ALL USERS & RECORD CONTROLS -->
+        <!-- ============================================================== -->
+        <div id="usersTab" class="space-y-4">
+            <div class="glass-card p-4 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div class="relative w-full sm:w-96">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3 text-xs text-gray-500"></i>
+                    <input type="text" id="userSearchInput" oninput="filterUsers()" placeholder="Search by @username, phone, or Device ID..."
+                        class="w-full bg-gray-900/90 border border-gray-700/80 rounded-xl pl-9 pr-4 py-2 text-xs text-white focus:border-sky-400 focus:outline-none">
+                </div>
+                <div class="flex items-center space-x-2 text-xs text-gray-400">
+                    <span>Auto-syncing with MongoDB Atlas every 2 seconds</span>
+                    <i class="fa-solid fa-rotate text-sky-400 animate-spin"></i>
+                </div>
+            </div>
+
+            <!-- Users Table -->
+            <div class="glass-card rounded-2xl overflow-hidden">
+                <div class="overflow-x-auto custom-scroll max-h-[550px]">
+                    <table class="w-full text-left text-xs text-gray-300">
+                        <thead class="bg-gray-900/90 uppercase text-[10px] text-gray-400 border-b border-gray-800 sticky top-0 z-10">
+                            <tr>
+                                <th class="p-3.5">User</th>
+                                <th class="p-3.5">Credits / Tier</th>
+                                <th class="p-3.5">Device Lock</th>
+                                <th class="p-3.5">Status</th>
+                                <th class="p-3.5">Custom Prompt</th>
+                                <th class="p-3.5 text-right">Quick Admin Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTableBody" class="divide-y divide-gray-800/60">
+                            <tr>
+                                <td colspan="6" class="p-8 text-center text-gray-500">
+                                    <i class="fa-solid fa-spinner fa-spin text-lg mb-2"></i>
+                                    <p>Loading database records from MongoDB Atlas...</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================================== -->
+        <!-- TAB 2: OWNER BROADCAST & MESSAGING -->
+        <!-- ============================================================== -->
+        <div id="broadcastTab" class="hidden space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                <!-- 👑 Send Global Announcement -->
+                <div class="glass-card p-6 rounded-2xl border-t-2 border-t-amber-500 gold-glow">
+                    <div class="flex items-center space-x-3 mb-4">
+                        <span class="text-2xl">👑</span>
+                        <div>
+                            <h3 class="text-base font-black text-amber-400">SEND OWNER GLOBAL BROADCAST</h3>
+                            <p class="text-xs text-gray-400">This pops up as a Golden Crown Alert Banner on every user's Android phone.</p>
+                        </div>
+                    </div>
+
+                    <form id="broadcastForm" class="space-y-4">
+                        <textarea id="broadcastText" rows="4" required placeholder="Write official announcement... (e.g. 🎉 Kythera 4K 120fps engine is now active for all VIP members!)"
+                            class="w-full bg-gray-900/90 border border-amber-500/40 rounded-xl p-3.5 text-xs text-white focus:border-amber-400 focus:outline-none custom-scroll"></textarea>
+                        
+                        <button type="submit" class="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-black py-3 rounded-xl text-xs flex items-center justify-center space-x-2 transition">
+                            <i class="fa-solid fa-bullhorn"></i>
+                            <span>PUSH BROADCAST TO ALL ANDROID DEVICES</span>
+                        </button>
+                    </form>
+                </div>
+
+                <!-- 💬 Send Private 1-on-1 Direct Message -->
+                <div class="glass-card p-6 rounded-2xl border-t-2 border-t-sky-500">
+                    <div class="flex items-center space-x-3 mb-4">
+                        <i class="fa-solid fa-paper-plane text-sky-400 text-xl"></i>
+                        <div>
+                            <h3 class="text-base font-black text-sky-400">PRIVATE 1-ON-1 INBOX MESSAGE</h3>
+                            <p class="text-xs text-gray-400">Directly message a specific user from 👑 Owner.</p>
+                        </div>
+                    </div>
+
+                    <form id="directMsgForm" class="space-y-3">
+                        <div>
+                            <label class="text-[11px] text-gray-400 font-semibold block mb-1">Target Username</label>
+                            <input type="text" id="targetRecipient" required placeholder="e.g. mozammil"
+                                class="w-full bg-gray-900/90 border border-gray-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:border-sky-400 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="text-[11px] text-gray-400 font-semibold block mb-1">Message</label>
+                            <textarea id="directMsgText" rows="3" required placeholder="Hello, your account has been verified and upgraded."
+                                class="w-full bg-gray-900/90 border border-gray-700 rounded-xl p-3 text-xs text-white focus:border-sky-400 focus:outline-none"></textarea>
+                        </div>
+                        <button type="submit" class="w-full bg-sky-500 hover:bg-sky-400 text-black font-black py-2.5 rounded-xl text-xs flex items-center justify-center space-x-2 transition">
+                            <i class="fa-solid fa-envelope"></i>
+                            <span>SEND PRIVATE INBOX MESSAGE</span>
+                        </button>
+                    </form>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- ============================================================== -->
+        <!-- TAB 3: PAYMENT PROOFS (JAZZCASH & EASYPAISA) -->
+        <!-- ============================================================== -->
+        <div id="paymentsTab" class="hidden space-y-4">
+            <div class="glass-card p-4 rounded-2xl flex items-center justify-between">
+                <div>
+                    <h3 class="text-sm font-black text-emerald-400">MANUAL JAZZCASH & EASYPAISA PROOFS</h3>
+                    <p class="text-xs text-gray-400">Users who sent money directly from inside the app.</p>
+                </div>
+                <button onclick="loadPayments()" class="text-xs bg-gray-800 hover:bg-gray-700 border border-gray-700 px-3 py-1.5 rounded-lg text-gray-300">
+                    <i class="fa-solid fa-rotate-right mr-1"></i> Refresh
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="paymentsList">
+                <div class="col-span-full p-8 text-center text-gray-500 glass-card rounded-2xl">
+                    No pending payment proofs.
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================================== -->
+        <!-- TAB 4: BULK VOUCHER KEY GENERATOR -->
+        <!-- ============================================================== -->
+        <div id="keysTab" class="hidden space-y-6">
+            <div class="glass-card p-6 rounded-2xl max-w-xl mx-auto space-y-4">
+                <h3 class="text-base font-black text-indigo-400 flex items-center gap-2">
+                    <i class="fa-solid fa-key"></i>
+                    <span>GENERATE VIP LICENSE VOUCHERS</span>
+                </h3>
+                <p class="text-xs text-gray-400">Generate unique codes to sell or distribute to VIP customers.</p>
+
+                <form id="keyGenForm" class="space-y-3">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-[11px] text-gray-400 block mb-1">Key Prefix</label>
+                            <input type="text" id="keyPrefix" value="VIP" class="w-full bg-gray-900 border border-gray-700 rounded-xl px-3 py-2 text-xs text-white">
+                        </div>
+                        <div>
+                            <label class="text-[11px] text-gray-400 block mb-1">Number of Keys</label>
+                            <input type="number" id="keyCount" value="10" min="1" max="100" class="w-full bg-gray-900 border border-gray-700 rounded-xl px-3 py-2 text-xs text-white">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-[11px] text-gray-400 block mb-1">Credits Per Key</label>
+                            <input type="number" id="keyCredits" value="9999999" class="w-full bg-gray-900 border border-gray-700 rounded-xl px-3 py-2 text-xs text-white">
+                        </div>
+                        <div>
+                            <label class="text-[11px] text-gray-400 block mb-1">Plan</label>
+                            <select id="keyPlan" class="w-full bg-gray-900 border border-gray-700 rounded-xl px-3 py-2 text-xs text-white">
+                                <option value="LIFETIME">LIFETIME VIP</option>
+                                <option value="YEARLY">YEARLY VIP</option>
+                                <option value="MONTHLY">MONTHLY VIP</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 rounded-xl text-xs transition">
+                        GENERATE & DOWNLOAD KEYS
+                    </button>
+                </form>
+
+                <div id="generatedKeysBox" class="hidden mt-4 p-3 bg-gray-950 rounded-xl border border-gray-800 text-[11px] font-mono text-emerald-400 max-h-48 overflow-y-auto custom-scroll">
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================================== -->
+        <!-- TAB 5: APP KILLSWITCH & FORCE UPDATE -->
+        <!-- ============================================================== -->
+        <div id="remoteTab" class="hidden space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                <!-- 🔒 Emergency App Freeze (Killswitch) -->
+                <div class="glass-card p-6 rounded-2xl border-t-2 border-t-rose-500">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <h3 class="text-base font-black text-rose-400">EMERGENCY APP FREEZE (KILLSWITCH)</h3>
+                            <p class="text-xs text-gray-400">Locks all Android apps immediately with custom maintenance message.</p>
+                        </div>
+                        <i class="fa-solid fa-triangle-exclamation text-rose-400 text-2xl"></i>
+                    </div>
+
+                    <form id="killswitchForm" class="space-y-3">
+                        <div class="flex items-center space-x-3 p-3 bg-gray-900/80 rounded-xl border border-gray-800">
+                            <input type="checkbox" id="freezeToggle" class="w-4 h-4 accent-rose-500">
+                            <label for="freezeToggle" class="text-xs font-bold text-white">Enable Maintenance Lock</label>
+                        </div>
+                        <div>
+                            <label class="text-[11px] text-gray-400 block mb-1">Maintenance Message Shown in App</label>
+                            <input type="text" id="freezeMessage" value="Kammal App is currently under system maintenance. Please check back in a few minutes."
+                                class="w-full bg-gray-900 border border-gray-700 rounded-xl px-3.5 py-2 text-xs text-white">
+                        </div>
+                        <button type="submit" class="w-full bg-rose-600 hover:bg-rose-500 text-white font-bold py-2.5 rounded-xl text-xs transition">
+                            SAVE EMERGENCY STATE
+                        </button>
+                    </form>
+                </div>
+
+                <!-- 📱 Version Control & Force Update -->
+                <div class="glass-card p-6 rounded-2xl border-t-2 border-t-sky-500">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <h3 class="text-base font-black text-sky-400">VERSION LOCK & FORCE UPDATE</h3>
+                            <p class="text-xs text-gray-400">Block outdated versions and force users to install latest APK.</p>
+                        </div>
+                        <i class="fa-solid fa-code-branch text-sky-400 text-2xl"></i>
+                    </div>
+
+                    <form id="versionForm" class="space-y-3">
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="text-[11px] text-gray-400 block mb-1">Minimum Allowed Version</label>
+                                <input type="text" id="minVersion" value="1.0.0" class="w-full bg-gray-900 border border-gray-700 rounded-xl px-3 py-2 text-xs text-white">
+                            </div>
+                            <div>
+                                <label class="text-[11px] text-gray-400 block mb-1">Latest Version</label>
+                                <input type="text" id="latestVersion" value="3.5.0" class="w-full bg-gray-900 border border-gray-700 rounded-xl px-3 py-2 text-xs text-white">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="text-[11px] text-gray-400 block mb-1">APK Download URL</label>
+                            <input type="text" id="updateUrl" placeholder="https://..." class="w-full bg-gray-900 border border-gray-700 rounded-xl px-3 py-2 text-xs text-white">
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <input type="checkbox" id="forceUpdateToggle" class="w-4 h-4 accent-sky-500">
+                            <label for="forceUpdateToggle" class="text-xs text-gray-300">Force Non-Dismissible Update Popup</label>
+                        </div>
+                        <button type="submit" class="w-full bg-sky-600 hover:bg-sky-500 text-white font-bold py-2.5 rounded-xl text-xs transition">
+                            UPDATE APP VERSION RULES
+                        </button>
+                    </form>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ============================================================== -->
+    <!-- 3. USER EDIT MODAL (CREDITS, PROMPT, BAN, UNLOCK) -->
+    <!-- ============================================================== -->
+    <div id="userModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="glass-card p-6 rounded-3xl max-w-lg w-full border border-sky-500/40 relative">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <h3 class="text-lg font-black text-white" id="modalUsername">Edit User</h3>
+                    <p class="text-xs text-gray-400">Complete control over credits, VIP plan, device lock & AI prompt</p>
+                </div>
+                <button onclick="closeUserModal()" class="text-gray-400 hover:text-white text-lg">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <form id="editUserForm" class="space-y-4">
+                <input type="hidden" id="editUsername">
+
+                <!-- Credits & Plan -->
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-[11px] text-gray-300 block mb-1">Credits Balance</label>
+                        <input type="number" id="editCredits" class="w-full bg-gray-900 border border-gray-700 rounded-xl px-3 py-2 text-xs text-white">
+                        <div class="flex space-x-1 mt-1">
+                            <button type="button" onclick="quickAddCredits(100)" class="px-2 py-0.5 bg-gray-800 hover:bg-gray-700 rounded text-[10px] text-gray-300">+100</button>
+                            <button type="button" onclick="quickAddCredits(1000)" class="px-2 py-0.5 bg-gray-800 hover:bg-gray-700 rounded text-[10px] text-gray-300">+1k</button>
+                            <button type="button" onclick="quickAddCredits(9999999)" class="px-2 py-0.5 bg-amber-500/20 text-amber-300 rounded text-[10px]">👑 9.9M</button>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="text-[11px] text-gray-300 block mb-1">VIP Plan</label>
+                        <select id="editPlan" class="w-full bg-gray-900 border border-gray-700 rounded-xl px-3 py-2 text-xs text-white">
+                            <option value="trial">Trial (Free)</option>
+                            <option value="monthly">Monthly VIP</option>
+                            <option value="yearly">Yearly VIP</option>
+                            <option value="lifetime">Lifetime VIP</option>
+                        </select>
+                        <div class="flex items-center space-x-2 mt-2">
+                            <input type="checkbox" id="editIsPro" class="w-3.5 h-3.5 accent-amber-500">
+                            <label for="editIsPro" class="text-[11px] text-amber-300 font-semibold">Mark as Active PRO</label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Custom Prompt for Gemini -->
+                <div>
+                    <label class="text-[11px] text-gray-300 block mb-1">User-Specific Custom AI Prompt</label>
+                    <textarea id="editPrompt" rows="2" placeholder="Custom instructions for this user's AI persona..."
+                        class="w-full bg-gray-900 border border-gray-700 rounded-xl p-2.5 text-xs text-white custom-scroll"></textarea>
+                </div>
+
+                <!-- Device Lock & Ban -->
+                <div class="p-3 bg-gray-900/90 rounded-xl border border-gray-800 space-y-2">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-xs font-bold text-white">Hardware Device Lock</p>
+                            <p class="text-[10px] text-gray-400" id="modalDeviceText">Device: Bound</p>
+                        </div>
+                        <button type="button" onclick="unlockUserDevice()" class="bg-rose-500/20 hover:bg-rose-500/40 text-rose-300 border border-rose-500/40 px-3 py-1 rounded-lg text-xs font-semibold">
+                            <i class="fa-solid fa-unlock mr-1"></i> Reset Device Lock
+                        </button>
+                    </div>
+
+                    <div class="pt-2 border-t border-gray-800 flex items-center justify-between">
+                        <div>
+                            <p class="text-xs font-bold text-white">Account Status</p>
+                            <p class="text-[10px] text-gray-400">Ban or suspend access</p>
+                        </div>
+                        <select id="editStatus" class="bg-gray-800 border border-gray-700 rounded-lg px-2.5 py-1 text-xs text-white">
+                            <option value="active">Active (Normal)</option>
+                            <option value="banned">Banned (Suspended)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="flex space-x-3 pt-2">
+                    <button type="button" onclick="closeUserModal()" class="w-1/3 bg-gray-800 hover:bg-gray-700 text-gray-300 py-2.5 rounded-xl text-xs font-semibold">
+                        Cancel
+                    </button>
+                    <button type="submit" class="w-2/3 bg-sky-500 hover:bg-sky-400 text-black font-black py-2.5 rounded-xl text-xs shadow-lg transition">
+                        SAVE USER CHANGES
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ============================================================== -->
+    <!-- 4. JAVASCRIPT LOGIC & 2-SECOND LIVE RADAR SYNC -->
+    <!-- ============================================================== -->
+    <script>
+        let adminAuthToken = localStorage.getItem('kammal_admin_token') || 'ADmin';
+        let allUsersData = [];
+        let radarInterval = null;
+
+        // Auto-check existing session
+        if (localStorage.getItem('kammal_admin_authed') === 'true') {
+            document.getElementById('loginOverlay').classList.add('hidden');
+            startLiveRadar();
+        }
+
+        // Login Handler
+        document.getElementById('adminLoginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const user = document.getElementById('adminUser').value.trim();
+            const pass = document.getElementById('adminPass').value.trim();
+
+            try {
+                const res = await fetch('/api/admin/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: user, password: pass })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    adminAuthToken = data.token;
+                    localStorage.setItem('kammal_admin_token', 'ADmin');
+                    localStorage.setItem('kammal_admin_authed', 'true');
+                    document.getElementById('loginOverlay').classList.add('hidden');
+                    startLiveRadar();
+                } else {
+                    document.getElementById('loginError').innerText = data.error || 'Authentication failed';
+                    document.getElementById('loginError').classList.remove('hidden');
+                }
+            } catch (err) {
+                if (user === 'adMIN' && pass === 'ADmin') {
+                    localStorage.setItem('kammal_admin_token', 'ADmin');
+                    localStorage.setItem('kammal_admin_authed', 'true');
+                    document.getElementById('loginOverlay').classList.add('hidden');
+                    startLiveRadar();
+                } else {
+                    alert("Invalid Credentials. Please use adMIN / ADmin");
+                }
+            }
+        });
+
+        function logoutAdmin() {
+            localStorage.removeItem('kammal_admin_authed');
+            location.reload();
+        }
+
+        function switchTab(tabId) {
+            ['usersTab', 'broadcastTab', 'paymentsTab', 'keysTab', 'remoteTab'].forEach(id => {
+                document.getElementById(id).classList.add('hidden');
+            });
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.className = "tab-btn px-4 py-2 rounded-xl text-xs font-bold transition text-gray-400 hover:text-white";
+            });
+
+            document.getElementById(tabId).classList.remove('hidden');
+            const activeBtn = document.getElementById('btn' + tabId.charAt(0).toUpperCase() + tabId.slice(1));
+            if (activeBtn) {
+                activeBtn.className = "tab-btn px-4 py-2 rounded-xl text-xs font-bold transition bg-sky-500/20 text-sky-400 border border-sky-500/40";
+            }
+
+            if (tabId === 'paymentsTab') loadPayments();
+        }
+
+        function startLiveRadar() {
+            fetchTelemetry();
+            fetchUsers();
+            if (radarInterval) clearInterval(radarInterval);
+            radarInterval = setInterval(() => {
+                fetchTelemetry();
+                fetchUsers(true);
+            }, 2000);
+        }
+
+        async function fetchTelemetry() {
+            try {
+                const res = await fetch('/api/admin/telemetry', {
+                    headers: { 'x-admin-key': 'ADmin' }
+                });
+                const data = await res.json();
+                if (data.success && data.telemetry) {
+                    const t = data.telemetry;
+                    document.getElementById('statActiveUsers').innerHTML = `<span>${t.radarActiveUsers}</span> <span class="text-xs px-2 py-0.5 rounded-full bg-sky-500/20 border border-sky-500/30 text-sky-300 font-normal">Now</span>`;
+                    document.getElementById('statTotalUsers').innerText = t.totalUsers;
+                    document.getElementById('statVipUsers').innerText = t.vipUsers;
+                    document.getElementById('statPendingPayments').innerText = t.pendingPayments;
+                    document.getElementById('statPatches').innerText = t.totalPatches;
+                }
+            } catch (_) {}
+        }
+
+        async function fetchUsers(isSilent = false) {
+            try {
+                const res = await fetch('/api/admin/users', {
+                    headers: { 'x-admin-key': 'ADmin' }
+                });
+                const data = await res.json();
+                if (data.success && data.users) {
+                    allUsersData = data.users;
+                    renderUsersTable(allUsersData);
+                }
+            } catch (_) {}
+        }
+
+        function renderUsersTable(users) {
+            const tbody = document.getElementById('usersTableBody');
+            if (!users || users.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-gray-500">No users found in database.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = users.map(u => `
+                <tr class="hover:bg-gray-800/40 transition">
+                    <td class="p-3.5">
+                        <div class="flex items-center space-x-2.5">
+                            <div class="w-8 h-8 rounded-full bg-sky-500/20 border border-sky-500/30 flex items-center justify-center font-bold text-sky-400">
+                                ${u.username.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                                <p class="font-bold text-white flex items-center gap-1.5">
+                                    <span>${u.username}</span>
+                                    ${u.isPro ? '<span class="text-amber-400 text-[10px]">👑 VIP</span>' : ''}
+                                </p>
+                                <p class="text-[10px] text-gray-400">${u.phone || u.email || 'No contact'}</p>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="p-3.5">
+                        <span class="font-bold text-emerald-400">${u.credits}</span>
+                        <span class="text-[10px] text-gray-400 ml-1">(${u.tier || 'FREE'})</span>
+                    </td>
+                    <td class="p-3.5">
+                        ${u.deviceId ? `
+                            <span class="px-2 py-0.5 rounded bg-gray-800 text-[10px] text-gray-300 font-mono border border-gray-700">
+                                🔒 ${u.deviceId.slice(0, 10)}...
+                            </span>
+                        ` : `
+                            <span class="text-emerald-400 text-[10px]">🔓 Unbound</span>
+                        `}
+                    </td>
+                    <td class="p-3.5">
+                        ${u.status === 'banned' ? `
+                            <span class="px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10px] font-bold">
+                                Banned
+                            </span>
+                        ` : `
+                            <span class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">
+                                Active
+                            </span>
+                        `}
+                    </td>
+                    <td class="p-3.5 max-w-xs truncate text-[11px] text-gray-400 font-mono">
+                        ${u.customPrompt ? u.customPrompt : '<span class="text-gray-600">Default</span>'}
+                    </td>
+                    <td class="p-3.5 text-right">
+                        <button onclick="openUserModal('${u.username}')" class="bg-sky-500/20 hover:bg-sky-500/40 text-sky-300 border border-sky-500/40 px-3 py-1.5 rounded-xl font-bold text-xs transition">
+                            <i class="fa-solid fa-pen-to-square mr-1"></i> Edit
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function filterUsers() {
+            const query = document.getElementById('userSearchInput').value.toLowerCase();
+            const filtered = allUsersData.filter(u => 
+                u.username.toLowerCase().includes(query) ||
+                (u.phone && u.phone.includes(query)) ||
+                (u.deviceId && u.deviceId.toLowerCase().includes(query))
+            );
+            renderUsersTable(filtered);
+        }
+
+        let selectedUser = null;
+        function openUserModal(username) {
+            selectedUser = allUsersData.find(u => u.username === username);
+            if (!selectedUser) return;
+
+            document.getElementById('modalUsername').innerText = `Edit @${selectedUser.username}`;
+            document.getElementById('editUsername').value = selectedUser.username;
+            document.getElementById('editCredits').value = selectedUser.credits;
+            document.getElementById('editPlan').value = selectedUser.proPlan || 'trial';
+            document.getElementById('editIsPro').checked = selectedUser.isPro || false;
+            document.getElementById('editPrompt').value = selectedUser.customPrompt || '';
+            document.getElementById('editStatus').value = selectedUser.status || 'active';
+            document.getElementById('modalDeviceText').innerText = selectedUser.deviceId ? `Device: ${selectedUser.deviceId}` : 'Device: Unbound';
+
+            document.getElementById('userModal').classList.remove('hidden');
+        }
+
+        function closeUserModal() {
+            document.getElementById('userModal').classList.add('hidden');
+        }
+
+        function quickAddCredits(amount) {
+            const input = document.getElementById('editCredits');
+            input.value = (parseInt(input.value) || 0) + amount;
+        }
+
+        async function unlockUserDevice() {
+            if (!selectedUser) return;
+            if (!confirm(`Are you sure you want to unlock physical device binding for @${selectedUser.username}?`)) return;
+
+            try {
+                const res = await fetch('/api/admin/user/update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-admin-key': 'ADmin' },
+                    body: JSON.stringify({ username: selectedUser.username, resetDevice: true })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert(`Device lock released for @${selectedUser.username}!`);
+                    document.getElementById('modalDeviceText').innerText = 'Device: Unbound';
+                    fetchUsers();
+                }
+            } catch (e) {
+                alert(e.message);
+            }
+        }
+
+        document.getElementById('editUserForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('editUsername').value;
+            const credits = document.getElementById('editCredits').value;
+            const proPlan = document.getElementById('editPlan').value;
+            const isPro = document.getElementById('editIsPro').checked;
+            const customPrompt = document.getElementById('editPrompt').value;
+            const status = document.getElementById('editStatus').value;
+
+            try {
+                const res = await fetch('/api/admin/user/update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-admin-key': 'ADmin' },
+                    body: JSON.stringify({ username, credits, proPlan, isPro, customPrompt, status })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    closeUserModal();
+                    fetchUsers();
+                    alert(`Updated user @${username} successfully!`);
+                }
+            } catch (err) {
+                alert(err.message);
+            }
+        });
+
+        document.getElementById('broadcastForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const text = document.getElementById('broadcastText').value.trim();
+            if (!text) return;
+
+            try {
+                const res = await fetch('/api/admin/chat/broadcast', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-admin-key': 'ADmin' },
+                    body: JSON.stringify({ text })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert("👑 GLOBAL BROADCAST PUSHED TO ALL ANDROID DEVICES!");
+                    document.getElementById('broadcastText').value = "";
+                }
+            } catch (err) {
+                alert(err.message);
+            }
+        });
+
+        document.getElementById('directMsgForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const recipient = document.getElementById('targetRecipient').value.trim();
+            const text = document.getElementById('directMsgText').value.trim();
+
+            try {
+                const res = await fetch('/api/admin/chat/send-direct', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-admin-key': 'ADmin' },
+                    body: JSON.stringify({ recipient, text })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert(`Message delivered directly to @${recipient}'s inbox!`);
+                    document.getElementById('directMsgText').value = "";
+                }
+            } catch (err) {
+                alert(err.message);
+            }
+        });
+
+        async function loadPayments() {
+            try {
+                const res = await fetch('/api/admin/payments/list', {
+                    headers: { 'x-admin-key': 'ADmin' }
+                });
+                const data = await res.json();
+                const container = document.getElementById('paymentsList');
+                if (!data.proofs || data.proofs.length === 0) {
+                    container.innerHTML = '<div class="col-span-full p-8 text-center text-gray-500 glass-card rounded-2xl">No payment proofs submitted yet.</div>';
+                    return;
+                }
+
+                container.innerHTML = data.proofs.map(p => `
+                    <div class="glass-card p-4 rounded-2xl border ${p.status === 'pending' ? 'border-amber-500/40' : 'border-gray-800'}">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="font-bold text-white">@${p.username}</span>
+                            <span class="px-2 py-0.5 rounded text-[10px] uppercase font-black ${p.status === 'approved' ? 'bg-emerald-500/20 text-emerald-400' : p.status === 'rejected' ? 'bg-rose-500/20 text-rose-400' : 'bg-amber-500/20 text-amber-400'}">
+                                ${p.status}
+                            </span>
+                        </div>
+                        <p class="text-xs text-gray-300">Method: <strong class="uppercase text-emerald-400">${p.method}</strong></p>
+                        <p class="text-xs text-gray-300">Amount: <strong>PKR ${p.amount}</strong></p>
+                        <p class="text-xs text-gray-300 font-mono">TxID: <span class="text-sky-300">${p.transactionId}</span></p>
+
+                        ${p.status === 'pending' ? `
+                            <div class="flex space-x-2 mt-4">
+                                <button onclick="reviewPayment('${p._id}', true, 9999999, 'LIFETIME')" class="w-1/2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 rounded-xl text-xs">
+                                    Approve VIP
+                                </button>
+                                <button onclick="reviewPayment('${p._id}', false)" class="w-1/2 bg-rose-600 hover:bg-rose-500 text-white font-bold py-2 rounded-xl text-xs">
+                                    Reject
+                                </button>
+                            </div>
+                        ` : ''}
+                    </div>
+                `).join('');
+            } catch (_) {}
+        }
+
+        async function reviewPayment(proofId, approve, credits, plan) {
+            try {
+                const res = await fetch('/api/admin/payments/review', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-admin-key': 'ADmin' },
+                    body: JSON.stringify({ proofId, approve, creditsToAdd: credits, setPlan: plan })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert(`Payment marked as ${approve ? 'Approved' : 'Rejected'}!`);
+                    loadPayments();
+                    fetchTelemetry();
+                }
+            } catch (err) {
+                alert(err.message);
+            }
+        }
+
+        document.getElementById('keyGenForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const prefix = document.getElementById('keyPrefix').value;
+            const count = document.getElementById('keyCount').value;
+            const credits = document.getElementById('keyCredits').value;
+            const plan = document.getElementById('keyPlan').value;
+
+            try {
+                const res = await fetch('/api/admin/keys/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-admin-key': 'ADmin' },
+                    body: JSON.stringify({ prefix, count, credits, plan, isPro: true })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    const box = document.getElementById('generatedKeysBox');
+                    box.classList.remove('hidden');
+                    box.innerHTML = data.keys.map(k => `<div>${k}</div>`).join('');
+                    alert(`Generated ${data.count} keys successfully!`);
+                }
+            } catch (err) {
+                alert(err.message);
+            }
+        });
+
+        document.getElementById('killswitchForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const enabled = document.getElementById('freezeToggle').checked;
+            const message = document.getElementById('freezeMessage').value;
+
+            try {
+                const res = await fetch('/api/admin/config/update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-admin-key': 'ADmin' },
+                    body: JSON.stringify({ maintenance: { enabled, message } })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert(enabled ? "⚠️ APP FROZEN FOR ALL USERS!" : "✅ App unfrozen and active.");
+                }
+            } catch (err) {
+                alert(err.message);
+            }
+        });
+
+        document.getElementById('versionForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const minAppVersion = document.getElementById('minVersion').value;
+            const latestAppVersion = document.getElementById('latestVersion').value;
+            const updateUrl = document.getElementById('updateUrl').value;
+            const forceUpdate = document.getElementById('forceUpdateToggle').checked;
+
+            try {
+                const res = await fetch('/api/admin/config/update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-admin-key': 'ADmin' },
+                    body: JSON.stringify({ minAppVersion, latestAppVersion, updateUrl, forceUpdate })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert("App Version rules saved!");
+                }
+            } catch (err) {
+                alert(err.message);
+            }
+        });
+    </script>
 </body>
-</html>
+                 </html>
