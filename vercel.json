@@ -1,15 +1,25 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "server.js",
-      "use": "@vercel/node"
-    }
-  ],
   "routes": [
     {
+      "src": "/admin",
+      "dest": "/public/admin.html"
+    },
+    {
+      "src": "/dashboard",
+      "dest": "/public/admin.html"
+    },
+    {
+      "src": "/admin.html",
+      "dest": "/public/admin.html"
+    },
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/index.js"
+    },
+    {
       "src": "/(.*)",
-      "dest": "server.js"
+      "dest": "/api/index.js"
     }
   ]
 }
